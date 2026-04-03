@@ -139,9 +139,10 @@ def start_ai_service(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> bool
         "stderr": stderr_fp,
     }
     if os.name == "nt":
-        kwargs["creationflags"] = (
-            subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
-        )
+        flags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
+        if hasattr(subprocess, "CREATE_NO_WINDOW"):
+            flags |= subprocess.CREATE_NO_WINDOW
+        kwargs["creationflags"] = flags
     else:
         kwargs["start_new_session"] = True
 
@@ -161,9 +162,10 @@ def start_ai_control_service(host: str = CONTROL_HOST, port: int = CONTROL_PORT)
         "stderr": subprocess.DEVNULL,
     }
     if os.name == "nt":
-        kwargs["creationflags"] = (
-            subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
-        )
+        flags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
+        if hasattr(subprocess, "CREATE_NO_WINDOW"):
+            flags |= subprocess.CREATE_NO_WINDOW
+        kwargs["creationflags"] = flags
     else:
         kwargs["start_new_session"] = True
     try:
