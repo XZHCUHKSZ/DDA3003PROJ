@@ -1,9 +1,10 @@
-"""
+﻿"""
 Map shell module.
 """
 
 from __future__ import annotations
 
+import ui_texts
 from utils import fmt_date
 
 
@@ -330,52 +331,64 @@ def build_dom(all_dates: list[str], current_index: int) -> str:
     first_label = fmt_date(all_dates[0])
     last_label = fmt_date(all_dates[-1])
     cur_label = fmt_date(all_dates[current_index])
+    app_title = ui_texts.get("app.title")
+    compare_label = ui_texts.get("control.compare")
+    zoom_in = ui_texts.get("control.zoom_in")
+    zoom_out = ui_texts.get("control.zoom_out")
+    reset_view = ui_texts.get("control.reset")
+    goto_detail = ui_texts.get("control.goto")
+    detail_label = ui_texts.get("control.detail")
+    prev7 = ui_texts.get("timeline.prev7")
+    prev1 = ui_texts.get("timeline.prev1")
+    next1 = ui_texts.get("timeline.next1")
+    next7 = ui_texts.get("timeline.next7")
+    scroll_hint = ui_texts.get("scroll.hint")
 
     return f"""\
 <div id="bootOverlay">
     <div class="boot-card">
         <div class="boot-ring"></div>
-        <h1 class="boot-title">\u7a7a\u6c14\u8d28\u91cf\u53ef\u89c6\u5316\u5e73\u53f0</h1>
+        <h1 class="boot-title">{app_title}</h1>
         <div class="boot-progress"></div>
-        <div class="boot-status" id="bootStatus">\u6b63\u5728\u521d\u59cb\u5316\u53ef\u89c6\u5316\u5f15\u64ce...</div>
-        <div class="boot-sub" id="bootSub">\u6b63\u5728\u51c6\u5907\u5730\u56fe\u7ec4\u4ef6\u4e0e\u57ce\u5e02\u6570\u636e</div>
-        <div class="boot-hint" id="bootHint">\u9996\u6b21\u52a0\u8f7d\u7ea6 5-10 \u79d2\uff0c\u8bf7\u7a0d\u5019</div>
-        <button class="boot-enter" id="bootEnter" type="button">\u52a0\u8f7d\u4e2d...</button>
-        <button class="boot-retry" id="bootRetry" type="button">\u5237\u65b0\u91cd\u8bd5</button>
+        <div class="boot-status" id="bootStatus"></div>
+        <div class="boot-sub" id="bootSub"></div>
+        <div class="boot-hint" id="bootHint"></div>
+        <button class="boot-enter" id="bootEnter" type="button"></button>
+        <button class="boot-retry" id="bootRetry" type="button"></button>
     </div>
 </div>
 
 <div id="mapWrapper">
     <button id="compareBtn" onclick="toggleCompareMode()">
         <span class="btn-icon" style="background:linear-gradient(135deg,#7c3aed,#a78bfa);">+</span>
-        <span id="compareBtnLabel">对比模式</span>
+        <span id="compareBtnLabel">{compare_label}</span>
     </button>
 
     <div id="mapControls">
-        <button class="map-ctrl-btn" id="ctrlZoomIn" title="放大">+</button>
-        <button class="map-ctrl-btn" id="ctrlZoomOut" title="缩小">-</button>
-        <button class="map-ctrl-btn" id="ctrlReset" title="重置视图" style="font-size:14px;">R</button>
+        <button class="map-ctrl-btn" id="ctrlZoomIn" title="{zoom_in}">+</button>
+        <button class="map-ctrl-btn" id="ctrlZoomOut" title="{zoom_out}">-</button>
+        <button class="map-ctrl-btn" id="ctrlReset" title="{reset_view}" style="font-size:14px;">R</button>
         <div class="map-ctrl-sep"></div>
-        <button class="map-ctrl-btn" id="ctrlGoDetail" title="跳转到详情" style="font-size:13px;">
-            v<br><span style="font-size:9px;line-height:1;display:block;">详情</span>
+        <button class="map-ctrl-btn" id="ctrlGoDetail" title="{goto_detail}" style="font-size:13px;">
+            v<br><span style="font-size:9px;line-height:1;display:block;">{detail_label}</span>
         </button>
     </div>
 
     <div id="topTimelineBar">
-        <button id="tl-prev-7" title="前 7 天">&laquo;</button>
-        <button id="tl-prev-1" title="前 1 天">&lsaquo;</button>
+        <button id="tl-prev-7" title="{prev7}">&laquo;</button>
+        <button id="tl-prev-1" title="{prev1}">&lsaquo;</button>
         <span class="tl-date-label">{first_label}</span>
         <input type="range" id="topSlider" min="0" max="{len(all_dates)-1}" value="{current_index}" step="1">
         <span class="tl-date-label">{last_label}</span>
-        <button id="tl-next-1" title="后 1 天">&rsaquo;</button>
-        <button id="tl-next-7" title="后 7 天">&raquo;</button>
+        <button id="tl-next-1" title="{next1}">&rsaquo;</button>
+        <button id="tl-next-7" title="{next7}">&raquo;</button>
         <span id="topCurrentDate">{cur_label}</span>
     </div>
 </div>
 
 <div id="scrollHint" onclick="document.getElementById('infoSection').scrollIntoView({{behavior:'smooth'}})">
     <span class="arrow">v</span>
-    下滑查看城市详情与历史趋势
+    {scroll_hint}
 </div>
 """
 
@@ -427,7 +440,7 @@ function setBootStatus(mainText, subText) {
 function showBootSlowHint() {
     const hint = byId('bootHint');
     const retry = byId('bootRetry');
-    if (hint) hint.textContent = '\u7f51\u7edc\u8f83\u6162\uff0c\u4ecd\u5728\u52a0\u8f7d\u5730\u56fe\u4e0e\u6570\u636e...';
+    if (hint) hint.textContent = t('loader.hint.slow');
     if (retry) retry.classList.add('show');
 }
 
@@ -437,10 +450,10 @@ function markBootReady() {
     const enterBtn = byId('bootEnter');
     const hint = byId('bootHint');
     byId('bootOverlay')?.classList.add('ready');
-    setBootStatus('\u52a0\u8f7d\u5b8c\u6210', '\u8bf7\u70b9\u51fb\u4e0b\u65b9\u6309\u94ae\u8fdb\u5165\u9875\u9762');
-    if (hint) hint.textContent = '\u6838\u5fc3\u6570\u636e\u5df2\u5c31\u7eea';
+    setBootStatus(t('loader.status.ready'), t('loader.sub.ready'));
+    if (hint) hint.textContent = t('loader.hint.ready');
     if (enterBtn) {
-        enterBtn.textContent = '\u8fdb\u5165\u5730\u56fe';
+        enterBtn.textContent = t('loader.enter.ready');
         enterBtn.classList.add('ready');
     }
 }
@@ -518,7 +531,14 @@ function bindTimelineEvents() {
 }
 
 bindTimelineEvents();
-setBootStatus('正在装载页面框架...', '正在挂载交互控件');
+setBootStatus(t('loader.status.framework'), t('loader.sub.framework'));
+const bootHint = byId('bootHint');
+const bootEnter = byId('bootEnter');
+const bootRetry = byId('bootRetry');
+if (bootHint) bootHint.textContent = t('loader.hint.default');
+if (bootEnter) bootEnter.textContent = t('loader.enter.loading');
+if (bootRetry) bootRetry.textContent = t('loader.retry');
+
 byId('bootRetry')?.addEventListener('click', () => window.location.reload());
 byId('bootEnter')?.addEventListener('click', () => {
     if (!bootReadyToEnter) return;
@@ -533,7 +553,7 @@ const bootSlowTimer = setTimeout(() => {
 }, 10000);
 
 setTimeout(function() {
-    setBootStatus('正在连接地图引擎...', '正在整理主视图布局');
+    setBootStatus(t('loader.status.connect_map'), t('loader.sub.connect_map'));
     const mapWrapper = byId('mapWrapper');
     const chartDivs = document.querySelectorAll('[_echarts_instance_]');
 
@@ -545,12 +565,12 @@ setTimeout(function() {
     });
 
     if (!mapChartInstance) {
-        setBootStatus('地图初始化失败', '未检测到地图实例，请刷新重试');
+        setBootStatus(t('loader.status.failed'), t('loader.sub.failed'));
         showBootSlowHint();
         return;
     }
 
-    setBootStatus('正在绑定地图交互...', '正在同步时间轴与缩放控制');
+    setBootStatus(t('loader.status.bind'), t('loader.sub.bind'));
     currentZoom = 1.2;
     currentCenter = [105, 36];
 
@@ -629,16 +649,18 @@ setTimeout(function() {
     mapChartInstance.on('finished', onBootRenderFinished);
     finishHooked = true;
 
-    setBootStatus('正在渲染主地图...', '即将完成');
-    renderMapByState();
+    setBootStatus(t('loader.status.render'), t('loader.sub.render'));
+    renderMapByState(true);
     setTimeout(() => {
         if (!bootReadyToEnter) onBootRenderFinished();
-    }, 1600);
+    }, 1000);
 
     window.addEventListener('resize', () => {
         if (mapChartInstance) mapChartInstance.resize();
         if (metricsChart) metricsChart.resize();
         if (settlementMapChart) settlementMapChart.resize();
     });
-}, 900);
+}, 120);
 """
+
+

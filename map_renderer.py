@@ -1,4 +1,4 @@
-"""
+﻿"""
 Unified client-side map renderer helpers.
 """
 
@@ -9,26 +9,26 @@ def build_js() -> str:
     return """\
 function getAQIPieces() {
     return [
-        { min: 0, max: 50, label: '优 (0-50)', color: '#00e400' },
-        { min: 51, max: 100, label: '良 (51-100)', color: '#ffff00' },
-        { min: 101, max: 150, label: '轻度污染 (101-150)', color: '#ff7e00' },
-        { min: 151, max: 200, label: '中度污染 (151-200)', color: '#ff0000' },
-        { min: 201, max: 300, label: '重度污染 (201-300)', color: '#99004c' },
-        { min: 301, label: '严重污染 (>300)', color: '#7e0023' }
+        { min: 0, max: 50, label: t('label.excellent'), color: '#00e400' },
+        { min: 51, max: 100, label: t('label.good'), color: '#ffff00' },
+        { min: 101, max: 150, label: t('label.light'), color: '#ff7e00' },
+        { min: 151, max: 200, label: t('label.moderate'), color: '#ff0000' },
+        { min: 201, max: 300, label: t('label.heavy'), color: '#99004c' },
+        { min: 301, label: t('label.severe'), color: '#7e0023' }
     ];
 }
 
 function buildMapSubtitle(dateStr) {
     const label = fmtDate(dateStr);
     if (compareMode) {
-        return '日期: ' + label + '  时间: 00:00  |  多城市对比模式';
+        return t('app.subtitle.compare').replace('{date}', label);
     }
-    return '日期: ' + label + '  时间: 00:00  |  点击城市标记查看详情';
+    return t('app.subtitle.normal').replace('{date}', label);
 }
 
 function buildMapTitle(dateStr) {
     return {
-        text: '全国城市空气质量实时发布平台',
+        text: t('app.title'),
         subtext: buildMapSubtitle(dateStr),
         left: 'center',
         top: '12px',
@@ -150,7 +150,8 @@ function buildMapTooltip(dateStr) {
     };
 }
 
-function renderMapByState() {
+let mapRenderPending = false;
+function renderMapByStateNow() {
     if (!mapChartInstance) return;
     const dateStr = ALL_DATES[currentDateIndex];
     let option;
@@ -168,5 +169,19 @@ function renderMapByState() {
     }
 
     mapChartInstance.setOption(option, true);
+}
+
+function renderMapByState(forceNow) {
+    if (forceNow) {
+        mapRenderPending = false;
+        renderMapByStateNow();
+        return;
+    }
+    if (mapRenderPending) return;
+    mapRenderPending = true;
+    requestAnimationFrame(() => {
+        mapRenderPending = false;
+        renderMapByStateNow();
+    });
 }
 """

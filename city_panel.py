@@ -4,6 +4,7 @@ City detail panel module.
 
 from __future__ import annotations
 
+import ui_texts
 from utils import fmt_date
 
 
@@ -274,11 +275,17 @@ def build_dom(all_dates: list[str], current_index: int) -> str:
     first_label = fmt_date(all_dates[0])
     last_label = fmt_date(all_dates[-1])
     cur_label = fmt_date(all_dates[current_index])
+    placeholder = ui_texts.get("city.placeholder")
+    filter_label = ui_texts.get("city.filter")
+    pollutants_title = ui_texts.get("city.pollutants")
+    health_title = ui_texts.get("city.health")
+    trend_title = ui_texts.get("city.trend7d")
+    compare_hint = ui_texts.get("city.compare_hint")
 
     return f"""\
 <div id="infoSection">
     <div id="infoHeader">
-        <div id="infoPlaceholder">点击地图上的城市标记，在这里查看详细数据</div>
+        <div id="infoPlaceholder">{placeholder}</div>
         <div id="infoHeaderContent" style="display:none; width:100%;">
             <div id="infoHeaderLeft">
                 <span id="selectedCityBadge">--</span>
@@ -289,7 +296,7 @@ def build_dom(all_dates: list[str], current_index: int) -> str:
     </div>
 
     <div id="filterBar" style="display:none;">
-        <span class="filter-label">图表显示</span>
+        <span class="filter-label">{filter_label}</span>
         <button class="filter-btn active" data-metric="AQI">AQI</button>
         <button class="filter-btn" data-metric="PM2.5_24h">PM2.5</button>
         <button class="filter-btn" data-metric="PM10_24h">PM10</button>
@@ -311,12 +318,12 @@ def build_dom(all_dates: list[str], current_index: int) -> str:
 
     <div id="infoBody" style="display:none;">
         <div id="compareListPanel">
-            <div id="compareEmptyHint">点击地图城市加入对比</div>
+            <div id="compareEmptyHint">{compare_hint}</div>
         </div>
 
         <div id="cityDetailPanel">
             <div class="detail-card">
-                <h3>污染物浓度</h3>
+                <h3>{pollutants_title}</h3>
                 <div class="detail-row">
                     <span class="detail-label">PM2.5</span>
                     <span class="detail-value" id="cityPM25">-- ug/m3</span>
@@ -344,13 +351,13 @@ def build_dom(all_dates: list[str], current_index: int) -> str:
             </div>
 
             <div class="detail-card">
-                <h3>健康建议</h3>
+                <h3>{health_title}</h3>
                 <p id="healthAdvice">--</p>
             </div>
         </div>
 
         <div id="chartPanel">
-            <div id="chartPanelTitle">近 7 日 AQI 趋势</div>
+            <div id="chartPanelTitle">{trend_title}</div>
             <div id="metricsChart" style="flex:1; min-height:300px;"></div>
         </div>
     </div>
@@ -373,6 +380,25 @@ function metricLabel(metric) {
     }[metric] || metric;
 }
 
+const CITY_TREND_CACHE = new Map();
+function getCityTrendValues(cityName, metric, startIdx, endIdx) {
+    const key = cityName + '::' + metric + '::' + startIdx + '::' + endIdx;
+    if (CITY_TREND_CACHE.has(key)) {
+        return CITY_TREND_CACHE.get(key);
+    }
+    const out = [];
+    for (let i = startIdx; i <= endIdx; i++) {
+        const date = ALL_DATES[i];
+        if (metric === 'AQI') {
+            out.push(CITY_DATA_BY_DATE[date]?.[cityName] ?? null);
+        } else {
+            out.push(POLLUTANTS_DATA[date]?.[cityName]?.[metric] ?? null);
+        }
+    }
+    CITY_TREND_CACHE.set(key, out);
+    return out;
+}
+
 function setText(id, text) {
     const el = document.getElementById(id);
     if (el) el.textContent = text;
@@ -386,7 +412,7 @@ function openCityDetail(cityName) {
     document.getElementById('filterBar').style.display = 'flex';
     document.getElementById('compareBtn').style.display = 'inline-flex';
     setText('selectedCityBadge', cityName);
-    setText('chartPanelTitle', cityName + ' - 近 7 日趋势');
+    setText('chartPanelTitle', cityName + ' - ' + t('city.trend7d'));
     if (typeof renderSettlementAnalysis === 'function') {
         renderSettlementAnalysis();
     }
@@ -442,7 +468,7 @@ function updateCityPanel() {
         aqiBadge.textContent = 'AQI --';
         aqiBadge.style.background = 'rgba(21,101,192,0.1)';
         aqiBadge.style.color = '#1a2a4a';
-        setText('levelBadge', '无数据');
+        setText('levelBadge', t('city.no_data'));
     }
 
     const metricToId = {
@@ -460,7 +486,7 @@ function updateCityPanel() {
     setText('cityNO2', (pollutants['NO2_24h'] ?? '--') + ' ug/m3');
     setText('cityO3', (pollutants['O3_8h'] ?? '--') + ' ug/m3');
     setText('cityCO', (pollutants['O3_8h_24h'] ?? '--') + ' ug/m3');
-    setText('healthAdvice', info ? info.advice : '该日期暂无数据');
+    setText('healthAdvice', info ? info.advice : t('city.no_data_day'));
 
     document.querySelectorAll('.detail-row').forEach(row => row.classList.remove('highlight-row'));
     if (selectedMetric !== 'AQI') {
@@ -500,7 +526,7 @@ function renderLineChart() {
     let areaColor1;
 
     if (selectedMetric === 'AQI') {
-        values = dates.map(d => CITY_DATA_BY_DATE[d]?.[currentCityName] ?? null);
+        values = getCityTrendValues(currentCityName, selectedMetric, startIdx, endIdx);
         seriesColor = '#1565c0';
         areaColor0 = 'rgba(21,101,192,0.18)';
         areaColor1 = 'rgba(21,101,192,0.01)';
@@ -516,7 +542,7 @@ function renderLineChart() {
         seriesColor = colors[selectedMetric] || '#1565c0';
         areaColor0 = 'rgba(21,101,192,0.15)';
         areaColor1 = 'rgba(21,101,192,0.01)';
-        values = dates.map(d => POLLUTANTS_DATA[d]?.[currentCityName]?.[selectedMetric] ?? null);
+        values = getCityTrendValues(currentCityName, selectedMetric, startIdx, endIdx);
     }
 
     const pointData = values.map(v => ({
@@ -537,10 +563,10 @@ function renderLineChart() {
             extraCssText: 'box-shadow:0 4px 16px rgba(21,101,192,0.12);border-radius:10px;',
             formatter: function(params) {
                 const p = params[0];
-                if (p.value == null) return p.axisValue + '<br/>无数据';
+                if (p.value == null) return p.axisValue + '<br/>' + t('city.no_data');
                 const color = selectedMetric === 'AQI' ? getAQIColor(p.value) : seriesColor;
                 return '<b style="color:#1a2a4a">' + fmtDate(dates[p.dataIndex]) + '</b><br/>'
-                    + '<span style="color:' + color + '">●</span> ' + name
+                    + '<span style="color:' + color + '">?</span> ' + name
                     + ': <b style="color:' + color + ';font-size:16px">' + p.value + '</b>';
             }
         },

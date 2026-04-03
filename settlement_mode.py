@@ -160,6 +160,9 @@ let settlementProvinceGeoCache = {};
 let settlementViewZoom = null;
 let settlementViewCenter = null;
 let settlementCompareMode = false;
+const settlementRadiusRowsCache = new Map();
+const settlementDiffusionCache = new Map();
+const settlementTrendCache = new Map();
 
 function normalizeCnCityName(name) {
     if (!name) return '';
@@ -236,6 +239,10 @@ function haversineKm(lng1, lat1, lng2, lat2) {
 }
 
 function getRadiusRows(centerCity, dateStr, radiusKm) {
+    const cacheKey = centerCity + '::' + dateStr + '::' + radiusKm;
+    if (settlementRadiusRowsCache.has(cacheKey)) {
+        return settlementRadiusRowsCache.get(cacheKey);
+    }
     const center = CITY_COORDS[centerCity];
     const day = CITY_DATA_BY_DATE[dateStr] || {};
     if (!center) return [];
@@ -256,6 +263,7 @@ function getRadiusRows(centerCity, dateStr, radiusKm) {
         });
     }
     rows.sort((a, b) => a.distanceKm - b.distanceKm);
+    settlementRadiusRowsCache.set(cacheKey, rows);
     return rows;
 }
 
@@ -266,6 +274,10 @@ function mean(values) {
 }
 
 function describeDiffusion(centerCity, radiusKm, endIdx) {
+    const cacheKey = centerCity + '::' + radiusKm + '::' + endIdx;
+    if (settlementDiffusionCache.has(cacheKey)) {
+        return settlementDiffusionCache.get(cacheKey);
+    }
     const startIdx = Math.max(0, endIdx - 6);
     const near = [];
     const outer = [];
@@ -285,7 +297,9 @@ function describeDiffusion(centerCity, radiusKm, endIdx) {
     const nearValid = near.filter(v => v != null);
     const outerValid = outer.filter(v => v != null);
     if (!nearValid.length || !outerValid.length) {
-        return { label: '数据不足', detail: '最近 7 天有效样本不足，暂无法判断扩散趋势。' };
+        const result = { label: '数据不足', detail: '最近 7 天有效样本不足，暂无法判断扩散趋势。' };
+        settlementDiffusionCache.set(cacheKey, result);
+        return result;
     }
 
     const firstGap = outer[0] != null && near[0] != null ? outer[0] - near[0] : 0;
@@ -293,12 +307,31 @@ function describeDiffusion(centerCity, radiusKm, endIdx) {
         ? outer[outer.length - 1] - near[near.length - 1] : 0;
     const delta = lastGap - firstGap;
     if (delta > 8) {
-        return { label: '外扩增强', detail: '外圈相对内圈上升更快，存在向外扩散迹象。' };
+        const result = { label: '外扩增强', detail: '外圈相对内圈上升更快，存在向外扩散迹象。' };
+        settlementDiffusionCache.set(cacheKey, result);
+        return result;
     }
     if (delta < -8) {
-        return { label: '回落收敛', detail: '外圈相对内圈回落，污染影响向中心附近收敛。' };
+        const result = { label: '回落收敛', detail: '外圈相对内圈回落，污染影响向中心附近收敛。' };
+        settlementDiffusionCache.set(cacheKey, result);
+        return result;
     }
-    return { label: '基本稳定', detail: '内外圈差值变化较小，暂无明显扩散方向。' };
+    const result = { label: '基本稳定', detail: '内外圈差值变化较小，暂无明显扩散方向。' };
+    settlementDiffusionCache.set(cacheKey, result);
+    return result;
+}
+
+function getSettlementTrendValues(cityName, metric, startIdx, endIdx) {
+    const key = cityName + '::' + metric + '::' + startIdx + '::' + endIdx;
+    if (settlementTrendCache.has(key)) {
+        return settlementTrendCache.get(key);
+    }
+    const out = [];
+    for (let i = startIdx; i <= endIdx; i++) {
+        out.push(getSettlementMetricValue(ALL_DATES[i], cityName));
+    }
+    settlementTrendCache.set(key, out);
+    return out;
 }
 
 function getDefaultSettlementZoom(radiusKm) {
@@ -474,7 +507,7 @@ function renderSettlementCompareInMainChart() {
         : 10;
     const seriesEntries = selectedRows.map((row, idx) => {
         const color = row.isCenter ? '#111827' : COMPARE_PALETTE[idx % COMPARE_PALETTE.length];
-        const values = dates.map(d => getSettlementMetricValue(d, row.name));
+        const values = getSettlementTrendValues(row.name, selectedMetric, startIdx, endIdx);
         return {
             name: row.name,
             color: color,

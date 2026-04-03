@@ -19,6 +19,7 @@ import map_base
 import map_renderer
 import region_mapping
 import settlement_mode
+import ui_texts
 from constants import CITY_COORDINATES
 from data_loader import AirQualityDataLoader, CityMatcher
 from utils import get_city_columns
@@ -200,6 +201,7 @@ let settlementMapChart = null;
 
         js_block = (
             js_globals
+            + ui_texts.build_js()
             + region_mapping.build_js()
             + map_renderer.build_js()
             + map_base.build_js()
