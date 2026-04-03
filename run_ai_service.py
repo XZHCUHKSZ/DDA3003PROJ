@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import socket
 import subprocess
 import sys
 import time
@@ -24,6 +25,14 @@ def _control_health_url(host: str = CONTROL_HOST, port: int = CONTROL_PORT) -> s
     return f"http://{host}:{port}/health"
 
 
+def _is_port_open(host: str, port: int, timeout: float = 0.4) -> bool:
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
 def is_ai_service_healthy(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT, timeout: float = 0.8) -> bool:
     try:
         with urllib.request.urlopen(_health_url(host, port), timeout=timeout) as resp:
@@ -35,7 +44,7 @@ def is_ai_service_healthy(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT, ti
 def is_ai_control_service_healthy(
     host: str = CONTROL_HOST,
     port: int = CONTROL_PORT,
-    timeout: float = 0.6,
+    timeout: float = 1.5,
 ) -> bool:
     try:
         with urllib.request.urlopen(_control_health_url(host, port), timeout=timeout) as resp:
@@ -63,17 +72,71 @@ def _build_control_cmd(host: str, port: int) -> list[str]:
     return [sys.executable, str(script_path), "--host", host, "--port", str(port)]
 
 
+def _resolve_service_python(project_root: Path) -> str:
+    if os.name == "nt":
+        venv_py = project_root / ".venv" / "Scripts" / "python.exe"
+    else:
+        venv_py = project_root / ".venv" / "bin" / "python"
+    if venv_py.exists():
+        return str(venv_py)
+    return sys.executable
+
+
+def _ensure_service_runtime(project_root: Path) -> tuple[bool, str]:
+    py_bin = _resolve_service_python(project_root)
+    if py_bin == sys.executable:
+        # try creating venv first for dependency isolation
+        try:
+            subprocess.run(
+                [sys.executable, "-m", "venv", str(project_root / ".venv")],
+                cwd=str(project_root),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+                timeout=40,
+            )
+        except Exception:
+            pass
+        py_bin = _resolve_service_python(project_root)
+
+    try:
+        subprocess.run(
+            [py_bin, "-m", "pip", "install", "-q", "fastapi", "uvicorn", "pydantic"],
+            cwd=str(project_root),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+            timeout=120,
+        )
+    except Exception:
+        return False, "Dependency bootstrap failed."
+    return True, py_bin
+
+
 def start_ai_service(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> bool:
     project_root = Path(__file__).resolve().parent
-    bat_path = project_root / "start_ai_service.bat"
-    if os.name == "nt" and bat_path.exists():
-        cmd = ["cmd.exe", "/c", str(bat_path)]
-    else:
-        cmd = _build_uvicorn_cmd(host, port)
+    ok, py_or_msg = _ensure_service_runtime(project_root)
+    if not ok:
+        return False
+    py_bin = py_or_msg
+    cmd = [
+        py_bin,
+        "-m",
+        "uvicorn",
+        "analysis_service.main:app",
+        "--host",
+        host,
+        "--port",
+        str(port),
+    ]
+    logs_dir = project_root / "logs"
+    logs_dir.mkdir(exist_ok=True)
+    stdout_fp = open(logs_dir / "ai_service.out.log", "ab")
+    stderr_fp = open(logs_dir / "ai_service.err.log", "ab")
     kwargs: dict = {
         "cwd": str(project_root),
-        "stdout": subprocess.DEVNULL,
-        "stderr": subprocess.DEVNULL,
+        "stdout": stdout_fp,
+        "stderr": stderr_fp,
     }
     if os.name == "nt":
         kwargs["creationflags"] = (
@@ -115,7 +178,7 @@ def ensure_ai_control_service_running(
     port: int = CONTROL_PORT,
     wait_seconds: float = 4.0,
 ) -> tuple[bool, str]:
-    if is_ai_control_service_healthy(host, port):
+    if is_ai_control_service_healthy(host, port) or _is_port_open(host, port):
         return True, f"AI control service already running at http://{host}:{port}"
 
     if not start_ai_control_service(host, port):
@@ -123,7 +186,7 @@ def ensure_ai_control_service_running(
 
     deadline = time.time() + max(1.0, wait_seconds)
     while time.time() < deadline:
-        if is_ai_control_service_healthy(host, port):
+        if is_ai_control_service_healthy(host, port) or _is_port_open(host, port):
             return True, f"AI control service started at http://{host}:{port}"
         time.sleep(0.2)
     return True, "AI control service started in background; health check still warming up."
@@ -134,7 +197,7 @@ def ensure_ai_service_running(
     port: int = DEFAULT_PORT,
     wait_seconds: float = 8.0,
 ) -> tuple[bool, str]:
-    if is_ai_service_healthy(host, port):
+    if is_ai_service_healthy(host, port) or _is_port_open(host, port):
         return True, "AI service already running."
 
     if not start_ai_service(host, port):
@@ -142,7 +205,7 @@ def ensure_ai_service_running(
 
     deadline = time.time() + max(1.0, wait_seconds)
     while time.time() < deadline:
-        if is_ai_service_healthy(host, port):
+        if is_ai_service_healthy(host, port) or _is_port_open(host, port):
             return True, f"AI service started at http://{host}:{port}"
         time.sleep(0.25)
     return True, "AI service process started; health check still warming up."

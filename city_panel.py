@@ -777,15 +777,16 @@ async function checkAIHealth(baseUrl, apiKey) {
     const resp = await fetchWithTimeout((baseUrl || '').replace(/\\/$/, '') + '/health', {
         method: 'GET',
         headers: headers
-    }, 4500);
+    }, 2500);
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     return true;
 }
 
-async function waitAIHealthReady(baseUrl, apiKey, attempts, delayMs) {
+async function waitAIHealthReady(baseUrl, apiKey, attempts, delayMs, onTry) {
     let lastErr = null;
     const total = Math.max(1, attempts || 1);
     for (let i = 0; i < total; i++) {
+        if (typeof onTry === 'function') onTry(i + 1, total);
         try {
             await checkAIHealth(baseUrl, apiKey);
             return true;
@@ -903,8 +904,13 @@ async function testAIConnection() {
             if (isLocalAIBase(AI_ANALYSIS_API_BASE || '')) {
                 setAIConfigStatus('AI服务未启动，正在自动启动...');
                 await startLocalAIService(AI_ANALYSIS_API_BASE || '');
-                setAIConfigStatus('AI服务已启动，正在等待就绪...');
-                await waitAIHealthReady(AI_ANALYSIS_API_BASE || '', aiRuntimeConfig.apiKey, 25, 1200);
+                await waitAIHealthReady(
+                    AI_ANALYSIS_API_BASE || '',
+                    aiRuntimeConfig.apiKey,
+                    15,
+                    1000,
+                    (cur, total) => setAIConfigStatus(`AI服务已启动，正在等待就绪... (${cur}/${total})`)
+                );
                 markAIOnlineReady(true);
                 setAIConfigStatus('AI服务已启动并连接成功');
             } else {
@@ -916,6 +922,8 @@ async function testAIConnection() {
             const raw = String(startErr?.message || err?.message || 'unknown error');
             if (raw.includes('Failed to fetch')) {
                 setAIConfigStatus('启动失败：本地AI控制服务不可达。请重新运行主程序后重试。');
+            } else if (raw.includes('AbortError') || raw.includes('timed out')) {
+                setAIConfigStatus('启动超时：服务仍未就绪。请稍后重试，或查看 logs/ai_service.err.log');
             } else {
                 setAIConfigStatus('启动/连接失败：' + raw);
             }
