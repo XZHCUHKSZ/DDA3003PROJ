@@ -337,8 +337,8 @@ function getSettlementTrendValues(cityName, metric, startIdx, endIdx) {
     return out;
 }
 
-function getSettlementBandSeries(centerCity, radiusKm, startIdx, endIdx) {
-    const key = centerCity + '::' + radiusKm + '::' + startIdx + '::' + endIdx;
+function getSettlementBandSeries(centerCity, radiusKm, startIdx, endIdx, metric) {
+    const key = centerCity + '::' + radiusKm + '::' + metric + '::' + startIdx + '::' + endIdx;
     if (settlementBandSeriesCache.has(key)) {
         return settlementBandSeriesCache.get(key);
     }
@@ -352,23 +352,36 @@ function getSettlementBandSeries(centerCity, radiusKm, startIdx, endIdx) {
             outer.push(null);
             continue;
         }
-        near.push(mean(rows.filter(r => r.distanceKm <= split).map(r => r.aqi)));
-        outer.push(mean(rows.filter(r => r.distanceKm > split).map(r => r.aqi)));
+        const dateStr = ALL_DATES[i];
+        const nearValues = rows
+            .filter(r => r.distanceKm <= split)
+            .map(r => getSettlementMetricValue(dateStr, r.name))
+            .filter(v => v != null && !Number.isNaN(v));
+        const outerValues = rows
+            .filter(r => r.distanceKm > split)
+            .map(r => getSettlementMetricValue(dateStr, r.name))
+            .filter(v => v != null && !Number.isNaN(v));
+        near.push(mean(nearValues));
+        outer.push(mean(outerValues));
     }
     const result = { near, outer };
     settlementBandSeriesCache.set(key, result);
     return result;
 }
 
-function getSettlementCircleAvgSeries(centerCity, radiusKm, startIdx, endIdx) {
-    const key = centerCity + '::' + radiusKm + '::avg::' + startIdx + '::' + endIdx;
+function getSettlementCircleAvgSeries(centerCity, radiusKm, startIdx, endIdx, metric) {
+    const key = centerCity + '::' + radiusKm + '::avg::' + metric + '::' + startIdx + '::' + endIdx;
     if (settlementCircleAvgCache.has(key)) {
         return settlementCircleAvgCache.get(key);
     }
     const out = [];
     for (let i = startIdx; i <= endIdx; i++) {
-        const rows = getRadiusRows(centerCity, ALL_DATES[i], radiusKm);
-        out.push(rows.length ? mean(rows.map(r => r.aqi)) : null);
+        const dateStr = ALL_DATES[i];
+        const rows = getRadiusRows(centerCity, dateStr, radiusKm);
+        const values = rows
+            .map(r => getSettlementMetricValue(dateStr, r.name))
+            .filter(v => v != null && !Number.isNaN(v));
+        out.push(values.length ? mean(values) : null);
     }
     settlementCircleAvgCache.set(key, out);
     return out;
@@ -576,7 +589,7 @@ function renderSettlementCompareInMainChart() {
             hideOverlap: cityCount > 7 && params.data && params.data.labelPriority < 3
         })
     }));
-    const bandSeries = getSettlementBandSeries(currentCityName, settlementRadiusKm, startIdx, endIdx);
+    const bandSeries = getSettlementBandSeries(currentCityName, settlementRadiusKm, startIdx, endIdx, selectedMetric);
     series.push({
         name: '中心圈均值',
         type: 'line',
@@ -654,11 +667,18 @@ function updateSettlementSummary(rows, diffusion, centerCity, radiusKm, endIdx) 
     const narrative = document.getElementById('settlementNarrative');
     if (!el || !narrative) return;
 
-    const avg = mean(rows.map(r => r.aqi));
+    const dateStr = ALL_DATES[endIdx];
+    const metricName = typeof compareMetricLabel === 'function'
+        ? compareMetricLabel(selectedMetric)
+        : (typeof metricLabel === 'function' ? metricLabel(selectedMetric) : selectedMetric);
+    const metricRows = rows
+        .map(r => ({ name: r.name, value: getSettlementMetricValue(dateStr, r.name) }))
+        .filter(r => r.value != null && !Number.isNaN(r.value));
+    const avg = mean(metricRows.map(r => r.value));
     const peak = rows.length ? rows.reduce((m, r) => r.aqi > m.aqi ? r : m, rows[0]) : null;
     const count = rows.length;
     const startIdx = Math.max(0, endIdx - 6);
-    const avg7d = getSettlementCircleAvgSeries(centerCity, radiusKm, startIdx, endIdx);
+    const avg7d = getSettlementCircleAvgSeries(centerCity, radiusKm, startIdx, endIdx, selectedMetric);
     const todayAvg = avg7d[avg7d.length - 1];
     const prevAvg = avg7d.length > 1 ? avg7d[avg7d.length - 2] : null;
     const delta = (todayAvg != null && prevAvg != null) ? (todayAvg - prevAvg) : null;
@@ -672,12 +692,15 @@ function updateSettlementSummary(rows, diffusion, centerCity, radiusKm, endIdx) 
         slope = (last.v - first.v) / Math.max(1, last.i - first.i);
     }
     const deltaText = delta == null ? '--' : `${delta >= 0 ? '+' : ''}${delta.toFixed(1)}`;
-    const slopeText = slope == null ? '--' : `${slope >= 0 ? '+' : ''}${slope.toFixed(2)} AQI/天`;
+    const slopeText = slope == null ? '--' : `${slope >= 0 ? '+' : ''}${slope.toFixed(2)} /天`;
+    const peakMetric = metricRows.length
+        ? metricRows.reduce((m, r) => r.value > m.value ? r : m, metricRows[0])
+        : null;
 
     el.innerHTML = `
         <div class="settlement-kpi"><div class="k">圈内城市数</div><div class="v">${count}</div></div>
-        <div class="settlement-kpi"><div class="k">圈内平均 AQI</div><div class="v">${avg != null ? avg.toFixed(1) : '--'}</div></div>
-        <div class="settlement-kpi"><div class="k">峰值城市</div><div class="v">${peak ? peak.name + ' ' + peak.aqi : '--'}</div></div>
+        <div class="settlement-kpi"><div class="k">圈内平均 ${metricName}</div><div class="v">${avg != null ? avg.toFixed(1) : '--'}</div></div>
+        <div class="settlement-kpi"><div class="k">峰值城市</div><div class="v">${peakMetric ? peakMetric.name + ' ' + peakMetric.value : '--'}</div></div>
         <div class="settlement-kpi"><div class="k">较昨日变化</div><div class="v">${deltaText}</div></div>
         <div class="settlement-kpi"><div class="k">7日斜率</div><div class="v">${slopeText}</div></div>
     `;
