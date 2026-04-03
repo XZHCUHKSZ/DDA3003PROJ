@@ -116,6 +116,35 @@ body {
     font-size: 12px;
     color: #6f8fb3;
 }
+.boot-mode-row {
+    margin-top: 14px;
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+.boot-mode-btn {
+    border: 1px solid #b8cfea;
+    background: #f2f7fe;
+    color: #355f8f;
+    border-radius: 999px;
+    padding: 7px 14px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.boot-mode-btn.active {
+    background: #1565c0;
+    border-color: #1565c0;
+    color: #fff;
+    box-shadow: 0 5px 14px rgba(21,101,192,0.25);
+}
+.boot-mode-tip {
+    margin-top: 8px;
+    text-align: center;
+    font-size: 12px;
+    color: #5a7fa8;
+}
 .boot-retry {
     margin: 14px auto 0;
     display: none;
@@ -357,6 +386,11 @@ def build_dom(all_dates: list[str], current_index: int) -> str:
         <div class="boot-progress"></div>
         <div class="boot-status" id="bootStatus">{loader_status_init}</div>
         <div class="boot-sub" id="bootSub">{loader_sub_init}</div>
+        <div class="boot-mode-row">
+            <button class="boot-mode-btn" id="bootModeOffline" type="button">离线模式</button>
+            <button class="boot-mode-btn" id="bootModeOnline" type="button">在线模式（启用AI）</button>
+        </div>
+        <div class="boot-mode-tip" id="bootModeTip">请先选择模式，再进入页面</div>
         <div class="boot-hint" id="bootHint">{loader_hint_default}</div>
         <button class="boot-enter" id="bootEnter" type="button">{loader_enter_loading}</button>
         <button class="boot-retry" id="bootRetry" type="button">{loader_retry}</button>
@@ -435,6 +469,47 @@ function syncMapSubtitle() {
 
 let bootOverlayDone = false;
 let bootReadyToEnter = false;
+let appRunMode = (localStorage.getItem('APP_RUN_MODE') || '').trim();
+
+function syncBootModeUI() {
+    const offlineBtn = byId('bootModeOffline');
+    const onlineBtn = byId('bootModeOnline');
+    offlineBtn?.classList.toggle('active', appRunMode === 'offline');
+    onlineBtn?.classList.toggle('active', appRunMode === 'online');
+    const tip = byId('bootModeTip');
+    if (!tip) return;
+    if (appRunMode === 'offline') {
+        tip.textContent = '离线模式：禁用AI分析，仅使用本地数据解读';
+    } else if (appRunMode === 'online') {
+        tip.textContent = '在线模式：可使用AI分析与服务设置';
+    } else {
+        tip.textContent = '请先选择模式，再进入页面';
+    }
+}
+
+function canEnterBoot() {
+    return bootReadyToEnter && (appRunMode === 'offline' || appRunMode === 'online');
+}
+
+function notifyRunModeChanged() {
+    window.APP_RUN_MODE = appRunMode || 'offline';
+    if (typeof window.onAppRunModeChanged === 'function') {
+        window.onAppRunModeChanged(window.APP_RUN_MODE);
+    }
+}
+
+function setAppRunMode(mode) {
+    if (mode !== 'offline' && mode !== 'online') return;
+    appRunMode = mode;
+    localStorage.setItem('APP_RUN_MODE', mode);
+    syncBootModeUI();
+    if (bootReadyToEnter) {
+        byId('bootEnter')?.classList.add('ready');
+        byId('bootEnter') && (byId('bootEnter').textContent = t('loader.enter.ready'));
+    }
+    notifyRunModeChanged();
+}
+
 function setBootStatus(mainText, subText) {
     const main = byId('bootStatus');
     const sub = byId('bootSub');
@@ -458,8 +533,13 @@ function markBootReady() {
     setBootStatus(t('loader.status.ready'), t('loader.sub.ready'));
     if (hint) hint.textContent = t('loader.hint.ready');
     if (enterBtn) {
-        enterBtn.textContent = t('loader.enter.ready');
-        enterBtn.classList.add('ready');
+        if (canEnterBoot()) {
+            enterBtn.textContent = t('loader.enter.ready');
+            enterBtn.classList.add('ready');
+        } else {
+            enterBtn.textContent = '请选择模式';
+            enterBtn.classList.remove('ready');
+        }
     }
 }
 
@@ -543,14 +623,24 @@ const bootRetry = byId('bootRetry');
 if (bootHint) bootHint.textContent = t('loader.hint.default');
 if (bootEnter) bootEnter.textContent = t('loader.enter.loading');
 if (bootRetry) bootRetry.textContent = t('loader.retry');
+syncBootModeUI();
+if (appRunMode === 'offline' || appRunMode === 'online') {
+    notifyRunModeChanged();
+}
+byId('bootModeOffline')?.addEventListener('click', () => setAppRunMode('offline'));
+byId('bootModeOnline')?.addEventListener('click', () => setAppRunMode('online'));
 
 byId('bootRetry')?.addEventListener('click', () => window.location.reload());
 byId('bootEnter')?.addEventListener('click', () => {
-    if (!bootReadyToEnter) return;
+    if (!canEnterBoot()) {
+        const tip = byId('bootModeTip');
+        if (tip && !appRunMode) tip.textContent = '请先选择离线或在线模式';
+        return;
+    }
     hideBootOverlay();
 });
 document.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && bootReadyToEnter && !bootOverlayDone) hideBootOverlay();
+    if (e.key === 'Enter' && canEnterBoot() && !bootOverlayDone) hideBootOverlay();
 });
 
 const bootSlowTimer = setTimeout(() => {

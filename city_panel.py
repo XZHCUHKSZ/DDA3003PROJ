@@ -308,10 +308,103 @@ def build_css() -> str:
     opacity: 0.65;
     cursor: not-allowed;
 }
+#aiConfigBtn {
+    border: 1px solid #b8cfea;
+    background: #f3f8ff;
+    color: #2f5f93;
+    border-radius: 999px;
+    padding: 7px 12px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+}
+#aiConfigBtn:hover {
+    background: #e7f0fc;
+}
 #aiStatus {
     margin-top: 10px;
     font-size: 12px;
     color: #6b8cba;
+    white-space: pre-line;
+}
+.ai-config-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(10,30,60,0.3);
+    z-index: 4200;
+    display: none;
+}
+.ai-config-backdrop.show {
+    display: block;
+}
+#aiConfigDrawer {
+    position: fixed;
+    right: 0;
+    top: 0;
+    height: 100%;
+    width: min(420px, 92vw);
+    background: #ffffff;
+    border-left: 1px solid #d8e7f8;
+    box-shadow: -8px 0 24px rgba(20,71,132,0.16);
+    z-index: 4300;
+    transform: translateX(104%);
+    transition: transform 0.24s ease;
+    padding: 14px 14px 16px;
+}
+#aiConfigDrawer.show {
+    transform: translateX(0);
+}
+.ai-config-title {
+    font-size: 16px;
+    font-weight: 800;
+    color: #1a2a4a;
+    margin-bottom: 10px;
+}
+.ai-config-group {
+    margin-bottom: 10px;
+}
+.ai-config-label {
+    font-size: 12px;
+    color: #5d7fa7;
+    margin-bottom: 4px;
+    display: block;
+    font-weight: 700;
+}
+.ai-config-input, .ai-config-select {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid #c7daf1;
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 13px;
+    color: #24476f;
+    background: #fbfdff;
+}
+.ai-config-row {
+    display: flex;
+    gap: 8px;
+}
+.ai-config-btn {
+    border: 1px solid #8db6e4;
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+}
+.ai-config-btn.primary {
+    background: #1565c0;
+    color: #fff;
+    border-color: #1565c0;
+}
+.ai-config-btn.ghost {
+    background: #f3f8ff;
+    color: #2f5f93;
+}
+#aiConfigStatus {
+    margin-top: 8px;
+    font-size: 12px;
+    color: #5d7fa7;
     white-space: pre-line;
 }
 #aiProgressWrap {
@@ -484,7 +577,10 @@ def build_dom(all_dates: list[str], current_index: int) -> str:
                 <div id="aiInsightTitle">{ui_texts.get("ai.title")}</div>
                 <div id="aiInsightSub">{ui_texts.get("ai.subtitle")}</div>
             </div>
-            <button id="aiGenerateBtn" type="button">{ui_texts.get("ai.btn")}</button>
+            <div style="display:flex;gap:8px;align-items:center;">
+                <button id="aiConfigBtn" type="button">AI服务设置</button>
+                <button id="aiGenerateBtn" type="button">{ui_texts.get("ai.btn")}</button>
+            </div>
         </div>
         <div id="aiStatus">{ui_texts.get("ai.empty")}</div>
         <div id="aiProgressWrap"><div id="aiProgressBar"></div></div>
@@ -502,6 +598,45 @@ def build_dom(all_dates: list[str], current_index: int) -> str:
                 <p id="aiCauseText">--</p>
             </div>
         </div>
+    </div>
+
+    <div class="ai-config-backdrop" id="aiConfigBackdrop"></div>
+    <div id="aiConfigDrawer">
+        <div class="ai-config-title">AI服务设置</div>
+        <div class="ai-config-group">
+            <label class="ai-config-label">运行模式</label>
+            <div id="aiModeState" style="font-size:12px;color:#2f5f93;">--</div>
+        </div>
+        <div class="ai-config-group">
+            <label class="ai-config-label">服务地址</label>
+            <input id="aiApiBaseInput" class="ai-config-input" placeholder="http://127.0.0.1:8787" />
+        </div>
+        <div class="ai-config-group">
+            <label class="ai-config-label">Provider</label>
+            <select id="aiProviderSelect" class="ai-config-select">
+                <option value="bailian">bailian</option>
+                <option value="openai">openai</option>
+                <option value="custom">custom</option>
+            </select>
+        </div>
+        <div class="ai-config-group">
+            <label class="ai-config-label">模型名（可选）</label>
+            <input id="aiModelInput" class="ai-config-input" placeholder="qwen-plus" />
+        </div>
+        <div class="ai-config-group">
+            <label class="ai-config-label">API Key（可选）</label>
+            <input id="aiApiKeyInput" type="password" class="ai-config-input" placeholder="不填写则使用服务端默认配置" />
+            <label style="margin-top:6px;display:flex;gap:6px;align-items:center;font-size:12px;color:#6b8cba;">
+                <input id="aiRememberKey" type="checkbox" />
+                在本机记住 Key（有安全风险）
+            </label>
+        </div>
+        <div class="ai-config-row">
+            <button id="aiTestConnBtn" class="ai-config-btn ghost" type="button">测试连接</button>
+            <button id="aiSaveConfigBtn" class="ai-config-btn primary" type="button">保存并应用</button>
+            <button id="aiCloseConfigBtn" class="ai-config-btn ghost" type="button">关闭</button>
+        </div>
+        <div id="aiConfigStatus">--</div>
     </div>
 
 </div>
@@ -550,6 +685,124 @@ function withAIDisclaimer(text) {
     const base = text || '';
     return base ? (base + '\\n仅供参考') : '仅供参考';
 }
+
+const AI_CONFIG_STORAGE_KEY = 'APP_AI_SETTINGS';
+let aiRunMode = window.APP_RUN_MODE || localStorage.getItem('APP_RUN_MODE') || 'offline';
+let aiRuntimeConfig = {
+    baseUrl: AI_ANALYSIS_API_BASE || 'http://127.0.0.1:8787',
+    provider: 'bailian',
+    model: '',
+    apiKey: '',
+    rememberKey: false
+};
+
+function loadAIRuntimeConfig() {
+    try {
+        const raw = localStorage.getItem(AI_CONFIG_STORAGE_KEY);
+        if (!raw) return;
+        const cfg = JSON.parse(raw);
+        aiRuntimeConfig.baseUrl = (cfg.baseUrl || aiRuntimeConfig.baseUrl || '').trim();
+        aiRuntimeConfig.provider = (cfg.provider || 'bailian').trim();
+        aiRuntimeConfig.model = (cfg.model || '').trim();
+        aiRuntimeConfig.rememberKey = !!cfg.rememberKey;
+        aiRuntimeConfig.apiKey = aiRuntimeConfig.rememberKey ? ((cfg.apiKey || '').trim()) : '';
+    } catch (err) {}
+}
+
+function persistAIRuntimeConfig() {
+    const cfg = {
+        baseUrl: aiRuntimeConfig.baseUrl,
+        provider: aiRuntimeConfig.provider,
+        model: aiRuntimeConfig.model,
+        rememberKey: !!aiRuntimeConfig.rememberKey,
+        apiKey: aiRuntimeConfig.rememberKey ? (aiRuntimeConfig.apiKey || '') : ''
+    };
+    localStorage.setItem(AI_CONFIG_STORAGE_KEY, JSON.stringify(cfg));
+}
+
+function applyAIBaseUrl() {
+    const base = (aiRuntimeConfig.baseUrl || '').trim();
+    if (base) {
+        AI_ANALYSIS_API_BASE = base;
+        localStorage.setItem('APP_AI_BASE_URL', base);
+    }
+}
+
+function setAIModeStateText() {
+    const modeEl = document.getElementById('aiModeState');
+    if (!modeEl) return;
+    modeEl.textContent = aiRunMode === 'online'
+        ? '在线模式（可使用AI分析）'
+        : '离线模式（仅本地数据，不请求AI服务）';
+}
+
+function syncAIConfigFormFromState() {
+    const baseInput = document.getElementById('aiApiBaseInput');
+    const providerSel = document.getElementById('aiProviderSelect');
+    const modelInput = document.getElementById('aiModelInput');
+    const keyInput = document.getElementById('aiApiKeyInput');
+    const remember = document.getElementById('aiRememberKey');
+    if (baseInput) baseInput.value = aiRuntimeConfig.baseUrl || '';
+    if (providerSel) providerSel.value = aiRuntimeConfig.provider || 'bailian';
+    if (modelInput) modelInput.value = aiRuntimeConfig.model || '';
+    if (keyInput) keyInput.value = aiRuntimeConfig.apiKey || '';
+    if (remember) remember.checked = !!aiRuntimeConfig.rememberKey;
+    setAIModeStateText();
+}
+
+function readAIConfigFormToState() {
+    const baseInput = document.getElementById('aiApiBaseInput');
+    const providerSel = document.getElementById('aiProviderSelect');
+    const modelInput = document.getElementById('aiModelInput');
+    const keyInput = document.getElementById('aiApiKeyInput');
+    const remember = document.getElementById('aiRememberKey');
+    aiRuntimeConfig.baseUrl = (baseInput?.value || '').trim() || 'http://127.0.0.1:8787';
+    aiRuntimeConfig.provider = (providerSel?.value || 'bailian').trim();
+    aiRuntimeConfig.model = (modelInput?.value || '').trim();
+    aiRuntimeConfig.rememberKey = !!remember?.checked;
+    aiRuntimeConfig.apiKey = (keyInput?.value || '').trim();
+}
+
+function setAIConfigStatus(text) {
+    const el = document.getElementById('aiConfigStatus');
+    if (el) el.textContent = text || '--';
+}
+
+function openAIConfigDrawer() {
+    syncAIConfigFormFromState();
+    document.getElementById('aiConfigBackdrop')?.classList.add('show');
+    document.getElementById('aiConfigDrawer')?.classList.add('show');
+}
+
+function closeAIConfigDrawer() {
+    document.getElementById('aiConfigBackdrop')?.classList.remove('show');
+    document.getElementById('aiConfigDrawer')?.classList.remove('show');
+}
+
+async function testAIConnection() {
+    readAIConfigFormToState();
+    applyAIBaseUrl();
+    setAIConfigStatus('正在测试连接...');
+    try {
+        const resp = await fetch((AI_ANALYSIS_API_BASE || '').replace(/\\/$/, '') + '/health', { method: 'GET' });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        setAIConfigStatus('连接成功：服务可用');
+    } catch (err) {
+        setAIConfigStatus('连接失败：' + (err?.message || 'unknown error'));
+    }
+}
+
+function onAppRunModeChanged(mode) {
+    aiRunMode = mode || 'offline';
+    setAIModeStateText();
+    const btn = document.getElementById('aiGenerateBtn');
+    if (btn) btn.disabled = (aiRunMode !== 'online');
+    if (aiRunMode !== 'online') {
+        resetAIInsightDisplay('当前为离线模式，AI分析已关闭');
+    }
+}
+
+window.onAppRunModeChanged = onAppRunModeChanged;
 
 let aiProgressTimer = null;
 
@@ -688,6 +941,10 @@ function refreshAIInsightPanel() {
         resetAIInsightDisplay(t('ai.empty'));
         return;
     }
+    if (aiRunMode !== 'online') {
+        resetAIInsightDisplay('当前为离线模式，AI分析已关闭');
+        return;
+    }
     if (!restoreAIInsightFromCache()) {
         resetAIInsightDisplay(t('ai.empty'));
     }
@@ -759,6 +1016,10 @@ function renderLocalFallbackInsight(payload, reasonText) {
 }
 
 async function generateAIInsight() {
+    if (aiRunMode !== 'online') {
+        setText('aiStatus', withAIDisclaimer('当前为离线模式，无法发起AI分析'));
+        return;
+    }
     if (!currentCityName) {
         resetAIInsightDisplay(t('ai.empty'));
         return;
@@ -774,12 +1035,19 @@ async function generateAIInsight() {
     if (sourcesList) sourcesList.innerHTML = '';
 
     const payload = buildAIAnalysisPayload();
+    payload.client_config = {
+        provider: aiRuntimeConfig.provider,
+        model: aiRuntimeConfig.model
+    };
     const cacheKey = getCurrentAIContextKey(payload);
 
     try {
-        const resp = await fetch(AI_ANALYSIS_API_BASE + '/api/analysis/settlement', {
+        const headers = { 'Content-Type': 'application/json' };
+        if (aiRuntimeConfig.apiKey) headers['X-API-Key'] = aiRuntimeConfig.apiKey;
+        const base = (AI_ANALYSIS_API_BASE || 'http://127.0.0.1:8787').replace(/\\/$/, '');
+        const resp = await fetch(base + '/api/analysis/settlement', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: headers,
             body: JSON.stringify(payload)
         });
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
@@ -1053,6 +1321,32 @@ document.querySelectorAll('.filter-btn').forEach(btn => {
 document.getElementById('aiGenerateBtn')?.addEventListener('click', () => {
     generateAIInsight();
 });
+
+document.getElementById('aiConfigBtn')?.addEventListener('click', () => {
+    openAIConfigDrawer();
+});
+document.getElementById('aiCloseConfigBtn')?.addEventListener('click', () => {
+    closeAIConfigDrawer();
+});
+document.getElementById('aiConfigBackdrop')?.addEventListener('click', () => {
+    closeAIConfigDrawer();
+});
+document.getElementById('aiTestConnBtn')?.addEventListener('click', async () => {
+    await testAIConnection();
+});
+document.getElementById('aiSaveConfigBtn')?.addEventListener('click', async () => {
+    readAIConfigFormToState();
+    applyAIBaseUrl();
+    persistAIRuntimeConfig();
+    setAIConfigStatus('配置已保存并应用');
+    await testAIConnection();
+    closeAIConfigDrawer();
+});
+
+loadAIRuntimeConfig();
+applyAIBaseUrl();
+syncAIConfigFormFromState();
+onAppRunModeChanged(aiRunMode);
 """
 
 
