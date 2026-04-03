@@ -178,7 +178,7 @@ def ensure_ai_control_service_running(
     port: int = CONTROL_PORT,
     wait_seconds: float = 4.0,
 ) -> tuple[bool, str]:
-    if is_ai_control_service_healthy(host, port) or _is_port_open(host, port):
+    if is_ai_control_service_healthy(host, port):
         return True, f"AI control service already running at http://{host}:{port}"
 
     if not start_ai_control_service(host, port):
@@ -186,10 +186,10 @@ def ensure_ai_control_service_running(
 
     deadline = time.time() + max(1.0, wait_seconds)
     while time.time() < deadline:
-        if is_ai_control_service_healthy(host, port) or _is_port_open(host, port):
+        if is_ai_control_service_healthy(host, port):
             return True, f"AI control service started at http://{host}:{port}"
         time.sleep(0.2)
-    return True, "AI control service started in background; health check still warming up."
+    return False, "AI control service process started, but health check timed out."
 
 
 def ensure_ai_service_running(

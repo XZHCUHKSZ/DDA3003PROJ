@@ -50,7 +50,11 @@ def main() -> None:
         prefix = "OK" if ok else "WARN"
         print(f"[AI][{prefix}] {msg}")
     else:
-        print("[AI] Auto-start skipped by default. Use --ai-autostart to enable.")
+        # Non-blocking warm-up to reduce first online-setup failures.
+        warm_ok, warm_msg = ensure_ai_service_running(wait_seconds=1.5)
+        warm_prefix = "OK" if warm_ok else "WARN"
+        print(f"[AI-WARMUP][{warm_prefix}] {warm_msg}")
+        print("[AI] Full auto-start skipped by default. Use --ai-autostart for strict startup checks.")
 
     if not os.path.exists(args.data):
         print(f"\n[ERROR] Data file not found: {args.data}")
