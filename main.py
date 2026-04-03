@@ -1,9 +1,9 @@
 """
-命令行入口。
+CLI entrypoint.
 
-使用方式:
-    python main.py                            # 使用默认路径
-    python main.py --data path/to/data.csv    # 指定数据文件
+Usage:
+    python main.py
+    python main.py --data path/to/data.csv
     python main.py --data data.csv --out visualizations/
 """
 
@@ -12,41 +12,53 @@ from __future__ import annotations
 import argparse
 import os
 
+from run_ai_service import ensure_ai_service_running
 from visualizer import InteractiveAirQualityMap
 
 
 def _parse_args() -> argparse.Namespace:
-    """解析命令行参数。"""
     parser = argparse.ArgumentParser(
-        description='中国城市空气质量地图可视化工具（滚动布局版）',
+        description="China city air-quality map visualizer (scroll layout)",
     )
     parser.add_argument(
-        '--data',
-        default=r'C:\Users\xzh88\Desktop\cleaned\combined_air_quality_data.csv',
-        help='输入 CSV 数据文件路径',
+        "--data",
+        default=r"C:\Users\xzh88\Desktop\cleaned\combined_air_quality_data.csv",
+        help="Input CSV data file path",
     )
     parser.add_argument(
-        '--out',
-        default=r'C:\Users\xzh88\Desktop\cleaned\visualizations',
-        help='输出目录路径（不存在时自动创建）',
+        "--out",
+        default=r"C:\Users\xzh88\Desktop\cleaned\visualizations",
+        help="Output directory path (auto-created if not exists)",
+    )
+    parser.add_argument(
+        "--no-ai-autostart",
+        action="store_true",
+        help="Do not auto-start local AI service",
     )
     return parser.parse_args()
 
 
 def main() -> None:
-    """程序主入口：解析参数、加载数据、生成可视化输出。"""
     args = _parse_args()
 
+    if not args.no_ai_autostart:
+        ok, msg = ensure_ai_service_running()
+        prefix = "OK" if ok else "WARN"
+        print(f"[AI][{prefix}] {msg}")
+    else:
+        print("[AI] Auto-start skipped (--no-ai-autostart).")
+
     if not os.path.exists(args.data):
-        print(f"\n❌ 找不到数据文件: {args.data}")
+        print(f"\n[ERROR] Data file not found: {args.data}")
         return
 
     visualizer = InteractiveAirQualityMap(args.data)
     visualizer.load_data()
     visualizer.run(output_dir=args.out)
-    print("\n✅ 程序执行完成！")
+    print("\n[OK] Program finished.")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
-    input("\n按回车键退出...")
+    input("\nPress Enter to exit...")
+
