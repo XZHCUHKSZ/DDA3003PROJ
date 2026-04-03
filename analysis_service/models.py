@@ -29,6 +29,8 @@ class Citation(BaseModel):
     url: str
     accessed_at: str
     used_fields: list[str] = Field(default_factory=list)
+    published_at: str | None = None
+    snippet: str | None = None
 
 
 class AnalysisResponse(BaseModel):

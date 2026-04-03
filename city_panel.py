@@ -1,4 +1,4 @@
-"""
+﻿"""
 City detail panel module.
 """
 
@@ -313,6 +313,21 @@ def build_css() -> str:
     font-size: 12px;
     color: #6b8cba;
 }
+#aiProgressWrap {
+    margin-top: 8px;
+    width: 100%;
+    height: 7px;
+    background: #e8f0fb;
+    border-radius: 999px;
+    overflow: hidden;
+    display: none;
+}
+#aiProgressBar {
+    width: 0%;
+    height: 100%;
+    background: linear-gradient(90deg, #4c8ed6 0%, #1565c0 100%);
+    transition: width 0.25s ease;
+}
 #aiBlocks {
     margin-top: 12px;
     display: grid;
@@ -350,7 +365,16 @@ def build_css() -> str:
 #aiSources li {
     color: #4a6a8a;
     font-size: 12px;
-    margin-bottom: 4px;
+    margin-bottom: 8px;
+}
+.ai-source-time {
+    color: #7a9cc0;
+    margin-left: 4px;
+}
+.ai-source-snippet {
+    margin-top: 2px;
+    color: #597a9d;
+    line-height: 1.55;
 }
 #aiSources a {
     color: #1565c0;
@@ -462,6 +486,7 @@ def build_dom(all_dates: list[str], current_index: int) -> str:
             <button id="aiGenerateBtn" type="button">{ui_texts.get("ai.btn")}</button>
         </div>
         <div id="aiStatus">{ui_texts.get("ai.empty")}</div>
+        <div id="aiProgressWrap"><div id="aiProgressBar"></div></div>
         <div id="aiBlocks" style="display:none;">
             <div class="ai-block">
                 <h4>{ui_texts.get("ai.section.settlement")}</h4>
@@ -524,10 +549,61 @@ function setText(id, text) {
     if (el) el.textContent = text;
 }
 
+let aiProgressTimer = null;
+
+function setAIProgress(value) {
+    const wrap = document.getElementById('aiProgressWrap');
+    const bar = document.getElementById('aiProgressBar');
+    if (!wrap || !bar) return;
+    wrap.style.display = 'block';
+    const v = Math.max(0, Math.min(100, Number(value) || 0));
+    bar.style.width = v + '%';
+}
+
+function startAIProgress() {
+    const stages = [
+        { p: 16, text: '\\u6b63\\u5728\\u8054\\u7f51\\u68c0\\u7d22\\u76f8\\u5173\\u4fe1\\u6e90...' },
+        { p: 44, text: '\\u6b63\\u5728\\u62c9\\u53d6\\u5e76\\u63d0\\u53d6\\u7f51\\u9875\\u8bc1\\u636e...' },
+        { p: 72, text: '\\u6b63\\u5728\\u751f\\u6210\\u805a\\u843d\\u4e0e\\u6269\\u6563\\u5206\\u6790...' },
+        { p: 88, text: '\\u6b63\\u5728\\u6574\\u7406\\u6765\\u6e90\\u4e0e\\u53ef\\u89c6\\u5316\\u5c55\\u793a...' }
+    ];
+    let idx = 0;
+    setAIProgress(5);
+    setText('aiStatus', stages[0].text);
+    if (aiProgressTimer) clearInterval(aiProgressTimer);
+    aiProgressTimer = setInterval(() => {
+        if (idx >= stages.length) return;
+        setAIProgress(stages[idx].p);
+        setText('aiStatus', stages[idx].text);
+        idx += 1;
+    }, 1200);
+}
+
+function finishAIProgress(statusText) {
+    if (aiProgressTimer) {
+        clearInterval(aiProgressTimer);
+        aiProgressTimer = null;
+    }
+    setAIProgress(100);
+    if (statusText) setText('aiStatus', statusText);
+    setTimeout(() => {
+        const wrap = document.getElementById('aiProgressWrap');
+        if (wrap) wrap.style.display = 'none';
+    }, 450);
+}
+
 function resetAIInsightDisplay(statusText) {
     const blocks = document.getElementById('aiBlocks');
     const sources = document.getElementById('aiSources');
     const list = document.getElementById('aiSourcesList');
+    if (aiProgressTimer) {
+        clearInterval(aiProgressTimer);
+        aiProgressTimer = null;
+    }
+    const wrap = document.getElementById('aiProgressWrap');
+    const bar = document.getElementById('aiProgressBar');
+    if (wrap) wrap.style.display = 'none';
+    if (bar) bar.style.width = '0%';
     setText('aiStatus', statusText || t('ai.empty'));
     setText('aiSettlementText', '--');
     setText('aiDiffusionText', '--');
@@ -571,14 +647,18 @@ function renderAICitations(citations) {
         return;
     }
     list.innerHTML = citations.map(c => {
-        const title = c.title || c.id || '\u6765\u6e90';
+        const title = c.title || c.id || '\\u6765\\u6e90';
         const href = c.url || '#';
-        const time = c.accessed_at ? ('（' + c.accessed_at + '）') : '';
+        const publish = c.published_at ? ('<span class=\"ai-source-time\">\\u53d1\\u5e03: ' + c.published_at + '</span>') : '';
+        const access = c.accessed_at ? ('<span class=\"ai-source-time\">\\u68c0\\u7d22: ' + c.accessed_at + '</span>') : '';
         const fieldText = c.used_fields && c.used_fields.length
-            ? (' 字段: ' + c.used_fields.join(', '))
+            ? ('<div class=\"ai-source-snippet\">\\u4f7f\\u7528\\u5b57\\u6bb5: ' + c.used_fields.join(', ') + '</div>')
             : '';
-        return '<li><a href="' + href + '" target="_blank" rel="noopener noreferrer">'
-            + title + '</a> ' + time + fieldText + '</li>';
+        const snippet = c.snippet
+            ? ('<div class=\"ai-source-snippet\">\\u8bc1\\u636e\\u6458\\u8981: ' + c.snippet + '</div>')
+            : '';
+        return '<li><a href=\"' + href + '\" target=\"_blank\" rel=\"noopener noreferrer\">'
+            + title + '</a> ' + publish + access + fieldText + snippet + '</li>';
     }).join('');
     wrap.style.display = 'block';
 }
@@ -684,9 +764,13 @@ async function generateAIInsight() {
     }
     const btn = document.getElementById('aiGenerateBtn');
     const blocks = document.getElementById('aiBlocks');
+    const sourcesWrap = document.getElementById('aiSources');
+    const sourcesList = document.getElementById('aiSourcesList');
     if (btn) btn.disabled = true;
-    setText('aiStatus', t('ai.loading'));
+    startAIProgress();
     if (blocks) blocks.style.display = 'none';
+    if (sourcesWrap) sourcesWrap.style.display = 'none';
+    if (sourcesList) sourcesList.innerHTML = '';
 
     const payload = buildAIAnalysisPayload();
     const cacheKey = getCurrentAIContextKey(payload);
@@ -699,10 +783,11 @@ async function generateAIInsight() {
         });
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
         const data = await resp.json();
+        const liveCount = (data.citations || []).filter(c => !!c.snippet).length;
 
         const statusText = data.used_fallback
-            ? 'AI 服务已连接，当前为后端本地回退模式（未配置百炼 Key）'
-            : ('模型: ' + (data.model || '--') + ' | 置信度 ' + Math.round((data.confidence || 0) * 100) + '%');
+            ? ('\\u8054\\u7f51\\u68c0\\u7d22\\u5df2\\u5b8c\\u6210\\uff0c\\u5f53\\u524d\\u4f7f\\u7528\\u56de\\u9000\\u6a21\\u5f0f\\u751f\\u6210\\u89e3\\u8bfb | \\u7f51\\u9875\\u8bc1\\u636e ' + liveCount + ' \\u6761')
+            : ('\\u6a21\\u578b: ' + (data.model || '--') + ' | \\u7f6e\\u4fe1\\u5ea6 ' + Math.round((data.confidence || 0) * 100) + '% | \\u7f51\\u9875\\u8bc1\\u636e ' + liveCount + ' \\u6761');
 
         const insightData = {
             settlement_text: data.settlement_text || '--',
@@ -713,8 +798,10 @@ async function generateAIInsight() {
         };
 
         renderAIInsight(insightData, statusText);
+        finishAIProgress(statusText);
         storeAIInsightInCache(cacheKey, insightData);
     } catch (err) {
+        finishAIProgress(t('ai.err'));
         renderLocalFallbackInsight(payload, t('ai.err') + '（未连接分析服务）');
     } finally {
         if (btn) btn.disabled = false;
@@ -967,4 +1054,6 @@ document.getElementById('aiGenerateBtn')?.addEventListener('click', () => {
     generateAIInsight();
 });
 """
+
+
 

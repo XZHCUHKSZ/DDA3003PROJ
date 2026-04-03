@@ -22,11 +22,16 @@ CITY_PROFILE_HINTS: dict[str, dict] = {
         'economic_level': '资源型城市，经济体量中等偏小',
         'gdp_hint': '约0.14万亿元（近年量级）',
         'industries': ['煤化工', '电力', '新材料', '装备制造', '食品加工'],
+        'geo_factors': ['华北平原南缘', '冬季静稳天气易出现', '秋冬颗粒物扩散条件偏弱'],
         'source': {
             'id': 'S4',
             'title': '安徽省统计局',
             'url': 'https://tjj.ah.gov.cn/',
         },
+        'supplementary_sources': [
+            {'title': '安徽省生态环境厅', 'url': 'https://sthjt.ah.gov.cn/'},
+            {'title': '淮北市人民政府-统计公报', 'url': 'https://www.huaibei.gov.cn/'},
+        ],
     },
     '长沙': {
         'province': '湖南',
@@ -39,6 +44,10 @@ CITY_PROFILE_HINTS: dict[str, dict] = {
             'title': '湖南省统计局',
             'url': 'http://tjj.hunan.gov.cn/',
         },
+        'supplementary_sources': [
+            {'title': '湖南省生态环境厅', 'url': 'https://sthjt.hunan.gov.cn/'},
+            {'title': '长沙市人民政府-统计公报', 'url': 'https://www.changsha.gov.cn/'},
+        ],
     },
     '泉州': {
         'province': '福建',
@@ -51,6 +60,10 @@ CITY_PROFILE_HINTS: dict[str, dict] = {
             'title': '福建省统计局',
             'url': 'https://tjj.fujian.gov.cn/',
         },
+        'supplementary_sources': [
+            {'title': '福建省生态环境厅', 'url': 'https://sthjt.fujian.gov.cn/'},
+            {'title': '泉州市人民政府-统计公报', 'url': 'https://www.quanzhou.gov.cn/'},
+        ],
     },
 }
 
@@ -138,6 +151,15 @@ def fetch_city_profile(city: str) -> dict:
                 'accessed_at': _now_iso(),
                 'used_fields': ['regional_economy', 'industry_structure'],
             }
+            out['supplementary_sources'] = [
+                {
+                    'title': item.get('title', ''),
+                    'url': item.get('url', ''),
+                    'accessed_at': _now_iso(),
+                    'used_fields': ['regional_policy', 'industry_background', 'city_context'],
+                }
+                for item in hint.get('supplementary_sources', [])
+            ]
         return out
 
     extract = str(data.get('extract', '') or '')
@@ -178,4 +200,13 @@ def fetch_city_profile(city: str) -> dict:
             'accessed_at': _now_iso(),
             'used_fields': ['regional_economy', 'industry_structure'],
         }
+        out['supplementary_sources'] = [
+            {
+                'title': item.get('title', ''),
+                'url': item.get('url', ''),
+                'accessed_at': _now_iso(),
+                'used_fields': ['regional_policy', 'industry_background', 'city_context'],
+            }
+            for item in hint.get('supplementary_sources', [])
+        ]
     return out

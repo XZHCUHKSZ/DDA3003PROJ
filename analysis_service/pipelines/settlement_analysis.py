@@ -12,7 +12,8 @@ from analysis_service.sources.registry import build_default_sources
 SYSTEM_PROMPT = (
     '你是空气质量聚落分析助手。请用普通人能看懂的中文表达，不要堆术语。'
     '先讲结论，再解释原因，再给行动建议。请严格基于给定数据生成结论，'
-    '每段结论都要附带来源ID，如[S1]。禁止编造未提供的数据。'
+    '每段结论都要附带来源ID，如[S1]。优先引用联网检索到的具体页面证据。'
+    '禁止编造未提供的数据。'
     '输出必须是JSON对象，字段: settlement_text, diffusion_text, cause_text, confidence。'
 )
 
@@ -31,16 +32,26 @@ def _build_fallback(req: AnalysisRequest, profile: dict) -> tuple[str, str, str,
     geo_factors = profile.get('geo_factors') or []
     industry_text = '、'.join(industries[:4]) if industries else ''
     econ_text = f'{econ}（约{gdp_hint}）' if (econ and gdp_hint) else econ
+    metric_hint = {
+        'AQI': 'AQI代表综合空气质量水平',
+        'PM2.5_24h': 'PM2.5更容易受燃烧源和二次转化影响',
+        'PM10_24h': 'PM10常受扬尘、施工和道路再悬浮影响',
+        'SO2_24h': 'SO2与燃煤及部分工业燃烧过程相关',
+        'NO2_24h': 'NO2常与交通排放和燃烧过程相关',
+        'O3_8h': 'O3受光照、温度和前体物浓度共同驱动',
+        'O3_8h_24h': 'O3受光照、温度和前体物浓度共同驱动',
+    }.get(s.metric, '该指标反映空气污染过程变化')
     settlement = (
         f"一句话结论：{s.city} 在 {s.date} 的 {s.metric} 水平最近波动"
         f"{'明显' if (s.delta_day or 0) and abs(s.delta_day or 0) >= 8 else '不大'}。"
         f"当前内圈均值 {_fmt_num(s.in_avg, 1)}，外圈均值 {_fmt_num(s.out_avg, 1)}，"
-        f"较昨日 {_fmt_num(s.delta_day, 1)}，7日趋势 {_fmt_num(s.slope_7d, 2)}/天。 [S1]"
+        f"较昨日 {_fmt_num(s.delta_day, 1)}，7日趋势 {_fmt_num(s.slope_7d, 2)}/天。"
+        f"从指标含义看，{metric_hint}，因此建议把“单日值”与“近7日斜率”一起看，避免误判。 [S1][S5]"
     )
     diffusion = (
         f"扩散判断：{s.diffusion_label or '待判定'}。"
         f"{s.diffusion_detail or '从内外圈差值看，短期方向仍需持续观察。'}"
-        '建议连续看3-7天变化，不要只看单日。 [S1][S2]'
+        '结合气象条件（风速风向、边界层高度、湿度与降水）同看，能更好区分“本地累积”还是“外来输送”。 [S1][S2][S6]'
     )
     cause_parts = []
     if econ_text:
@@ -58,9 +69,9 @@ def _build_user_prompt(req: AnalysisRequest, sources: list[dict], profile: dict)
     return json.dumps(
         {
             'task': (
-                '对聚落分析做中文解读：必须通俗、短句、可执行建议、附来源ID引用。'
+                '对聚落分析做中文解读：必须通俗、完整、可执行建议、附来源ID引用。'
                 '成因段必须明确写出：1)当地经济体量判断；2)本地或所在省重点产业类型；'
-                '3)这些产业和污染物变化的关系。'
+                '3)这些产业和污染物变化的关系；4)地理条件如何影响扩散。'
             ),
             'snapshot': req.snapshot.model_dump(by_alias=True),
             'history': req.history[-14:],
@@ -73,15 +84,18 @@ def _build_user_prompt(req: AnalysisRequest, sources: list[dict], profile: dict)
                 'geo_factors': profile.get('geo_factors', []),
                 'profile_text': profile.get('profile_text', ''),
             },
+            'web_evidence': profile.get('web_evidence', []),
             'sources': sources,
             'output_requirements': {
                 'language': 'zh-CN',
-                'max_length': 600,
+                'max_length': 1200,
                 'must_cite': True,
                 'audience': '普通公众',
-                'style': '先结论后解释，避免过度专业术语',
+                'style': '先结论后解释，避免过度专业术语，每段3-5句，解释清楚因果链条',
                 'must_include_city_profile': True,
                 'must_include_geography_factor': True,
+                'prefer_detail': True,
+                'prefer_live_web_sources': True,
             },
         },
         ensure_ascii=False,
@@ -124,7 +138,7 @@ def _ensure_specific_cause(cause_text: str, req: AnalysisRequest, profile: dict)
 
 
 def run_analysis(req: AnalysisRequest) -> AnalysisResponse:
-    sources, profile = build_default_sources(req.snapshot.city)
+    sources, profile = build_default_sources(req.snapshot.city, req.snapshot.metric, req.snapshot.date)
     provider = BailianClient()
     used_fallback = False
 
@@ -145,7 +159,12 @@ def run_analysis(req: AnalysisRequest) -> AnalysisResponse:
         used_fallback = True
         settlement_text, diffusion_text, cause_text, confidence = _build_fallback(req, profile)
 
-    citations = [Citation(**src) for src in sources]
+    # 来源输出收口：优先展示有正文证据片段的联网来源；保留本地数据来源用于数值可追溯
+    live_with_snippet = [s for s in sources if s.get('snippet')]
+    local_core = [s for s in sources if str(s.get('url', '')).startswith('local://')]
+    ministry_core = [s for s in sources if 'mee.gov.cn' in str(s.get('url', '')) and not s.get('snippet')]
+    selected_sources = (local_core[:1] + live_with_snippet[:6] + ministry_core[:1]) or sources[:6]
+    citations = [Citation(**src) for src in selected_sources]
     return AnalysisResponse(
         analysis_id='ana_' + uuid.uuid4().hex[:12],
         provider='bailian' if provider.enabled and not used_fallback else 'fallback',
