@@ -312,6 +312,7 @@ def build_css() -> str:
     margin-top: 10px;
     font-size: 12px;
     color: #6b8cba;
+    white-space: pre-line;
 }
 #aiProgressWrap {
     margin-top: 8px;
@@ -501,10 +502,6 @@ def build_dom(all_dates: list[str], current_index: int) -> str:
                 <p id="aiCauseText">--</p>
             </div>
         </div>
-        <div id="aiSources" style="display:none;">
-            <div style="font-size:12px;color:#5f83ad;font-weight:800;margin-bottom:6px;">{ui_texts.get("ai.section.sources")}</div>
-            <ul id="aiSourcesList"></ul>
-        </div>
     </div>
 
 </div>
@@ -547,6 +544,11 @@ function getCityTrendValues(cityName, metric, startIdx, endIdx) {
 function setText(id, text) {
     const el = document.getElementById(id);
     if (el) el.textContent = text;
+}
+
+function withAIDisclaimer(text) {
+    const base = text || '';
+    return base ? (base + '\\n仅供参考') : '仅供参考';
 }
 
 let aiProgressTimer = null;
@@ -668,9 +670,8 @@ function renderAIInsight(insightData, statusText) {
     setText('aiSettlementText', insightData?.settlement_text || '--');
     setText('aiDiffusionText', insightData?.diffusion_text || '--');
     setText('aiCauseText', insightData?.cause_text || '--');
-    setText('aiStatus', statusText || insightData?.status_text || t('ai.empty'));
+    setText('aiStatus', withAIDisclaimer(statusText || insightData?.status_text || t('ai.empty')));
     if (blocks) blocks.style.display = 'grid';
-    renderAICitations(insightData?.citations || []);
 }
 
 function restoreAIInsightFromCache(payload) {
@@ -783,11 +784,10 @@ async function generateAIInsight() {
         });
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
         const data = await resp.json();
-        const liveCount = (data.citations || []).filter(c => !!c.snippet).length;
 
         const statusText = data.used_fallback
-            ? ('\\u8054\\u7f51\\u68c0\\u7d22\\u5df2\\u5b8c\\u6210\\uff0c\\u5f53\\u524d\\u4f7f\\u7528\\u56de\\u9000\\u6a21\\u5f0f\\u751f\\u6210\\u89e3\\u8bfb | \\u7f51\\u9875\\u8bc1\\u636e ' + liveCount + ' \\u6761')
-            : ('\\u6a21\\u578b: ' + (data.model || '--') + ' | \\u7f6e\\u4fe1\\u5ea6 ' + Math.round((data.confidence || 0) * 100) + '% | \\u7f51\\u9875\\u8bc1\\u636e ' + liveCount + ' \\u6761');
+            ? '联网检索已完成，当前使用回退模式生成解读'
+            : '分析已生成';
 
         const insightData = {
             settlement_text: data.settlement_text || '--',
