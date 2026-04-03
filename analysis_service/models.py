@@ -24,6 +24,16 @@ class AnalysisRequest(BaseModel):
     client_config: dict[str, Any] = Field(default_factory=dict)
 
 
+class ProviderCheckRequest(BaseModel):
+    provider: str = "bailian"
+    model: str = ""
+
+
+class ProviderCheckResponse(BaseModel):
+    ok: bool
+    message: str
+
+
 class Citation(BaseModel):
     id: str
     title: str
@@ -45,3 +55,4 @@ class AnalysisResponse(BaseModel):
     confidence: float
     citations: list[Citation]
     used_fallback: bool = False
+    fallback_reason: str | None = None

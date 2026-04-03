@@ -782,6 +782,24 @@ async function checkAIHealth(baseUrl, apiKey) {
     return true;
 }
 
+async function checkAIProvider(baseUrl, apiKey, provider, model) {
+    const headers = { 'Content-Type': 'application/json' };
+    if (apiKey) headers['X-API-Key'] = apiKey;
+    const resp = await fetchWithTimeout((baseUrl || '').replace(/\\/$/, '') + '/api/provider/check', {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify({
+            provider: provider || 'bailian',
+            model: model || ''
+        })
+    }, 12000);
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || !data.ok) {
+        throw new Error(data.message || ('HTTP ' + resp.status));
+    }
+    return data;
+}
+
 async function waitAIHealthReady(baseUrl, apiKey, attempts, delayMs, onTry) {
     let lastErr = null;
     const total = Math.max(1, attempts || 1);
@@ -897,8 +915,15 @@ async function testAIConnection() {
     }
     try {
         await checkAIHealth(AI_ANALYSIS_API_BASE || '', aiRuntimeConfig.apiKey);
+        setAIConfigStatus('服务可达，正在校验模型...');
+        await checkAIProvider(
+            AI_ANALYSIS_API_BASE || '',
+            aiRuntimeConfig.apiKey,
+            aiRuntimeConfig.provider,
+            aiRuntimeConfig.model
+        );
         markAIOnlineReady(true);
-        setAIConfigStatus('连接成功：服务可用');
+        setAIConfigStatus('连接成功：服务与模型均可用');
     } catch (err) {
         try {
             if (isLocalAIBase(AI_ANALYSIS_API_BASE || '')) {
@@ -911,8 +936,15 @@ async function testAIConnection() {
                     1000,
                     (cur, total) => setAIConfigStatus(`AI服务已启动，正在等待就绪... (${cur}/${total})`)
                 );
+                setAIConfigStatus('服务已就绪，正在校验模型...');
+                await checkAIProvider(
+                    AI_ANALYSIS_API_BASE || '',
+                    aiRuntimeConfig.apiKey,
+                    aiRuntimeConfig.provider,
+                    aiRuntimeConfig.model
+                );
                 markAIOnlineReady(true);
-                setAIConfigStatus('AI服务已启动并连接成功');
+                setAIConfigStatus('AI服务已启动，模型鉴权成功');
             } else {
                 markAIOnlineReady(false);
                 setAIConfigStatus('连接失败：' + (err?.message || 'unknown error'));
@@ -1191,8 +1223,7 @@ async function generateAIInsight() {
     const payload = buildAIAnalysisPayload();
     payload.client_config = {
         provider: aiRuntimeConfig.provider,
-        model: aiRuntimeConfig.model,
-        base_url: aiRuntimeConfig.baseUrl
+        model: aiRuntimeConfig.model
     };
     const cacheKey = getCurrentAIContextKey(payload);
 
@@ -1209,7 +1240,7 @@ async function generateAIInsight() {
         const data = await resp.json();
 
         const statusText = data.used_fallback
-            ? '联网检索已完成，当前使用回退模式生成解读'
+            ? ('AI生成失败，已切换回退模式：' + (data.fallback_reason || '未返回具体原因'))
             : '分析已生成';
 
         const insightData = {

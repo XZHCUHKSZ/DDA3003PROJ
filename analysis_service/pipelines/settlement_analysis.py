@@ -142,14 +142,13 @@ def run_analysis(req: AnalysisRequest, *, api_key: str = '') -> AnalysisResponse
     client_cfg = req.client_config or {}
     provider_name = str(client_cfg.get('provider') or 'bailian').strip().lower()
     model_name = str(client_cfg.get('model') or '').strip()
-    api_base = str(client_cfg.get('base_url') or '').strip()
 
     provider = BailianClient(
         api_key=api_key,
-        base_url=api_base,
         model=model_name,
     )
     used_fallback = False
+    fallback_reason: str | None = None
 
     if provider.enabled and provider_name in ('bailian', 'openai', 'custom'):
         try:
@@ -161,11 +160,16 @@ def run_analysis(req: AnalysisRequest, *, api_key: str = '') -> AnalysisResponse
             if not settlement_text or not diffusion_text or not cause_text:
                 raise RuntimeError('Model output missing required fields')
             cause_text = _ensure_specific_cause(cause_text, req, profile)
-        except Exception:
+        except Exception as err:
             used_fallback = True
+            fallback_reason = str(err)
             settlement_text, diffusion_text, cause_text, confidence = _build_fallback(req, profile)
     else:
         used_fallback = True
+        if not provider.enabled:
+            fallback_reason = 'API Key missing'
+        elif provider_name not in ('bailian', 'openai', 'custom'):
+            fallback_reason = f'Unsupported provider: {provider_name}'
         settlement_text, diffusion_text, cause_text, confidence = _build_fallback(req, profile)
 
     # 来源输出收口：优先展示有正文证据片段的联网来源；保留本地数据来源用于数值可追溯
@@ -185,4 +189,5 @@ def run_analysis(req: AnalysisRequest, *, api_key: str = '') -> AnalysisResponse
         confidence=max(0.0, min(1.0, confidence)),
         citations=citations,
         used_fallback=used_fallback,
+        fallback_reason=fallback_reason,
     )
