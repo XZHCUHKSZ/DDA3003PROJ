@@ -343,6 +343,11 @@ def build_dom(all_dates: list[str], current_index: int) -> str:
     next1 = ui_texts.get("timeline.next1")
     next7 = ui_texts.get("timeline.next7")
     scroll_hint = ui_texts.get("scroll.hint")
+    loader_status_init = ui_texts.get("loader.status.init")
+    loader_sub_init = ui_texts.get("loader.sub.init")
+    loader_hint_default = ui_texts.get("loader.hint.default")
+    loader_enter_loading = ui_texts.get("loader.enter.loading")
+    loader_retry = ui_texts.get("loader.retry")
 
     return f"""\
 <div id="bootOverlay">
@@ -350,11 +355,11 @@ def build_dom(all_dates: list[str], current_index: int) -> str:
         <div class="boot-ring"></div>
         <h1 class="boot-title">{app_title}</h1>
         <div class="boot-progress"></div>
-        <div class="boot-status" id="bootStatus"></div>
-        <div class="boot-sub" id="bootSub"></div>
-        <div class="boot-hint" id="bootHint"></div>
-        <button class="boot-enter" id="bootEnter" type="button"></button>
-        <button class="boot-retry" id="bootRetry" type="button"></button>
+        <div class="boot-status" id="bootStatus">{loader_status_init}</div>
+        <div class="boot-sub" id="bootSub">{loader_sub_init}</div>
+        <div class="boot-hint" id="bootHint">{loader_hint_default}</div>
+        <button class="boot-enter" id="bootEnter" type="button">{loader_enter_loading}</button>
+        <button class="boot-retry" id="bootRetry" type="button">{loader_retry}</button>
     </div>
 </div>
 
