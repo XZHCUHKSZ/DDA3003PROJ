@@ -25,11 +25,12 @@ def _fmt_num(v: float | None, digits: int = 2) -> str:
 
 def _build_fallback(req: AnalysisRequest, profile: dict) -> tuple[str, str, str, float]:
     s = req.snapshot
-    econ = profile.get('economic_level') or '经济体量信息待补充'
+    econ = profile.get('economic_level') or ''
     gdp_hint = profile.get('gdp_hint')
     industries = profile.get('industries') or []
-    industry_text = '、'.join(industries[:4]) if industries else '主导产业信息待补充'
-    econ_text = f'{econ}（约{gdp_hint}）' if gdp_hint else econ
+    geo_factors = profile.get('geo_factors') or []
+    industry_text = '、'.join(industries[:4]) if industries else ''
+    econ_text = f'{econ}（约{gdp_hint}）' if (econ and gdp_hint) else econ
     settlement = (
         f"一句话结论：{s.city} 在 {s.date} 的 {s.metric} 水平最近波动"
         f"{'明显' if (s.delta_day or 0) and abs(s.delta_day or 0) >= 8 else '不大'}。"
@@ -41,12 +42,15 @@ def _build_fallback(req: AnalysisRequest, profile: dict) -> tuple[str, str, str,
         f"{s.diffusion_detail or '从内外圈差值看，短期方向仍需持续观察。'}"
         '建议连续看3-7天变化，不要只看单日。 [S1][S2]'
     )
-    cause = (
-        f"城市画像补充：{s.city} 的经济画像为“{econ_text}”，"
-        f"产业关键词包括：{industry_text}。"
-        '当产业活动强度上升且气象扩散条件偏弱时，更容易出现短时抬升。'
-        '建议结合风速风向、湿度和降水继续验证。 [S1][S2][S3]'
-    )
+    cause_parts = []
+    if econ_text:
+        cause_parts.append(f"{s.city} 的经济画像可概括为“{econ_text}”。 [S3][S4]")
+    if industry_text:
+        cause_parts.append(f"本地/周边产业结构可关注：{industry_text}，其活动强度变化会影响污染排放强弱。 [S3][S4]")
+    if geo_factors:
+        cause_parts.append(f"地理条件因素：{s.city} 具有“{'、'.join(geo_factors[:3])}”等特征，会影响污染物扩散与滞留。 [S3]")
+    cause_parts.append('建议结合风速风向、湿度和降水继续验证，并关注连续3天以上同向变化。 [S1][S2]')
+    cause = ''.join(cause_parts)
     return settlement, diffusion, cause, 0.62
 
 
@@ -66,6 +70,7 @@ def _build_user_prompt(req: AnalysisRequest, sources: list[dict], profile: dict)
                 'economic_level': profile.get('economic_level'),
                 'gdp_hint': profile.get('gdp_hint'),
                 'industries': profile.get('industries', []),
+                'geo_factors': profile.get('geo_factors', []),
                 'profile_text': profile.get('profile_text', ''),
             },
             'sources': sources,
@@ -76,6 +81,7 @@ def _build_user_prompt(req: AnalysisRequest, sources: list[dict], profile: dict)
                 'audience': '普通公众',
                 'style': '先结论后解释，避免过度专业术语',
                 'must_include_city_profile': True,
+                'must_include_geography_factor': True,
             },
         },
         ensure_ascii=False,
@@ -84,27 +90,37 @@ def _build_user_prompt(req: AnalysisRequest, sources: list[dict], profile: dict)
 
 def _ensure_specific_cause(cause_text: str, req: AnalysisRequest, profile: dict) -> str:
     city = req.snapshot.city
-    econ = profile.get('economic_level') or '经济体量信息待补充'
+    econ = profile.get('economic_level') or ''
     gdp_hint = profile.get('gdp_hint')
     industries = profile.get('industries') or []
+    geo_factors = profile.get('geo_factors') or []
     province = profile.get('province')
 
     has_city = city in cause_text
     has_econ = ('经济' in cause_text) or ('GDP' in cause_text) or ('体量' in cause_text)
     has_industry = any(ind in cause_text for ind in industries) if industries else False
+    has_geo = ('地理' in cause_text) or ('沿海' in cause_text) or ('盆地' in cause_text) or ('山地' in cause_text) or ('平原' in cause_text)
 
-    if has_city and has_econ and has_industry:
+    if has_city and ((not industries and not econ) or (has_econ and (has_industry or not industries))) and (has_geo or not geo_factors):
         return cause_text
 
-    industry_text = '、'.join(industries[:5]) if industries else '主导产业信息待补充'
+    industry_text = '、'.join(industries[:5]) if industries else ''
     region_text = f'{province}{city}' if province else city
-    econ_text = f'{econ}（约{gdp_hint}）' if gdp_hint else econ
-    supplement = (
-        f"\n补充说明：{region_text}的经济画像为“{econ_text}”，"
-        f"产业结构可关注：{industry_text}。"
-        "当上述产业活动强度上升且扩散条件不佳时，污染更易累积或向外围传输。 [S3][S4]"
-    )
-    return (cause_text.rstrip() + supplement).strip()
+    econ_text = f'{econ}（约{gdp_hint}）' if (econ and gdp_hint) else econ
+    supplements: list[str] = []
+    if econ_text or industry_text:
+        line = f"\n补充说明：{region_text}"
+        if econ_text:
+            line += f"的经济画像为“{econ_text}”"
+        if industry_text:
+            line += ('' if not econ_text else '，') + f"产业结构可关注：{industry_text}"
+        line += "。 [S3][S4]"
+        supplements.append(line)
+    if geo_factors and not has_geo:
+        supplements.append(f"\n地理条件因素：{city}具备“{'、'.join(geo_factors[:3])}”等特征，可能改变污染物的扩散效率与累积位置。 [S3]")
+    if not supplements:
+        return cause_text
+    return (cause_text.rstrip() + ''.join(supplements)).strip()
 
 
 def run_analysis(req: AnalysisRequest) -> AnalysisResponse:

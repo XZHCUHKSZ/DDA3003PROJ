@@ -824,7 +824,7 @@ function renderLineChart() {
                 if (p.value == null) return p.axisValue + '<br/>' + t('city.no_data');
                 const color = selectedMetric === 'AQI' ? getAQIColor(p.value) : seriesColor;
                 return '<b style="color:#1a2a4a">' + fmtDate(dates[p.dataIndex]) + '</b><br/>'
-                    + '<span style="color:' + color + '">?</span> ' + name
+                    + '<span style="color:' + color + '">●</span> ' + name
                     + ': <b style="color:' + color + ';font-size:16px">' + p.value + '</b>';
             }
         },

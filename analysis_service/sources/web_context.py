@@ -12,6 +12,10 @@ INDUSTRY_KEYWORDS = [
     '软件', '集成电路', '港口物流', '文旅', '金融服务'
 ]
 
+GEO_KEYWORDS = [
+    '沿海', '海岸', '港口', '平原', '盆地', '山地', '丘陵', '河谷', '河网', '季风', '台风'
+]
+
 CITY_PROFILE_HINTS: dict[str, dict] = {
     '淮北': {
         'province': '安徽',
@@ -29,10 +33,23 @@ CITY_PROFILE_HINTS: dict[str, dict] = {
         'economic_level': '省会城市，经济体量较大',
         'gdp_hint': '约1.4万亿元（近年量级）',
         'industries': ['工程机械', '汽车及零部件', '电子信息', '新材料', '食品制造'],
+        'geo_factors': ['内陆河网城市', '夏季高温高湿', '静稳天气时扩散效率下降'],
         'source': {
             'id': 'S4',
             'title': '湖南省统计局',
             'url': 'http://tjj.hunan.gov.cn/',
+        },
+    },
+    '泉州': {
+        'province': '福建',
+        'economic_level': '沿海制造业与民营经济活跃城市',
+        'gdp_hint': '约1.2万亿元（近年量级）',
+        'industries': ['纺织鞋服', '石化', '机械装备', '建材', '电子信息'],
+        'geo_factors': ['沿海港口城市', '受海陆风与季风影响明显', '近海湿润空气对二次颗粒物形成有促进作用'],
+        'source': {
+            'id': 'S4',
+            'title': '福建省统计局',
+            'url': 'https://tjj.fujian.gov.cn/',
         },
     },
 }
@@ -57,7 +74,7 @@ def _extract_gdp_level(text: str) -> tuple[str, str | None]:
     if not m:
         m = re.search(r'(\d+(?:\.\d+)?)\s*万亿元', t)
     if not m:
-        return '经济体量信息待补充', None
+        return '', None
 
     val = float(m.group(1))
     if val >= 2.0:
@@ -77,6 +94,14 @@ def _extract_industries(text: str) -> list[str]:
     return found[:6]
 
 
+def _extract_geo_factors(text: str) -> list[str]:
+    found: list[str] = []
+    for kw in GEO_KEYWORDS:
+        if kw in text and kw not in found:
+            found.append(kw)
+    return found[:5]
+
+
 def fetch_city_profile(city: str) -> dict:
     query_city = city.replace('市', '').strip()
     encoded = urllib.parse.quote(query_city)
@@ -87,9 +112,10 @@ def fetch_city_profile(city: str) -> dict:
 
     if not data:
         out = {
-            'economic_level': '经济体量信息待补充',
+            'economic_level': '',
             'gdp_hint': None,
             'industries': [],
+            'geo_factors': [],
             'profile_text': '',
             'source': {
                 'id': 'S3',
@@ -103,6 +129,7 @@ def fetch_city_profile(city: str) -> dict:
             out['economic_level'] = hint.get('economic_level') or out['economic_level']
             out['gdp_hint'] = hint.get('gdp_hint') or out['gdp_hint']
             out['industries'] = hint.get('industries') or out['industries']
+            out['geo_factors'] = hint.get('geo_factors') or out['geo_factors']
             out['province'] = hint.get('province')
             out['extra_source'] = {
                 'id': hint.get('source', {}).get('id', 'S4'),
@@ -116,18 +143,22 @@ def fetch_city_profile(city: str) -> dict:
     extract = str(data.get('extract', '') or '')
     econ_level, gdp_hint = _extract_gdp_level(extract)
     industries = _extract_industries(extract)
+    geo_factors = _extract_geo_factors(extract)
     if hint:
-        if econ_level == '经济体量信息待补充' and hint.get('economic_level'):
+        if not econ_level and hint.get('economic_level'):
             econ_level = hint['economic_level']
         if not gdp_hint and hint.get('gdp_hint'):
             gdp_hint = hint['gdp_hint']
         if not industries:
             industries = hint.get('industries', [])
+        if not geo_factors:
+            geo_factors = hint.get('geo_factors', [])
 
     out = {
         'economic_level': econ_level,
         'gdp_hint': gdp_hint,
         'industries': industries,
+        'geo_factors': geo_factors,
         'profile_text': extract[:500],
         'province': hint.get('province') if hint else None,
         'source': {
