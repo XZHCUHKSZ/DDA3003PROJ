@@ -38,6 +38,7 @@ TEXTS: dict[str, str] = {
     "loader.hint.ready": "\u6838\u5fc3\u6570\u636e\u5df2\u5c31\u7eea",
     "loader.enter.ready": "\u8fdb\u5165\u5730\u56fe",
     "control.compare": "\u5bf9\u6bd4\u6a21\u5f0f",
+    "control.compare.exit": "\u9000\u51fa\u5bf9\u6bd4",
     "control.zoom_in": "\u653e\u5927",
     "control.zoom_out": "\u7f29\u5c0f",
     "control.reset": "\u91cd\u7f6e\u89c6\u56fe",
@@ -54,6 +55,9 @@ TEXTS: dict[str, str] = {
     "city.health": "\u5065\u5eb7\u5efa\u8bae",
     "city.trend7d": "\u8fd17\u65e5\u8d8b\u52bf",
     "city.compare_hint": "\u70b9\u51fb\u5730\u56fe\u57ce\u5e02\u52a0\u5165\u5bf9\u6bd4",
+    "city.compare_badge": "\u591a\u57ce\u5e02\u5bf9\u6bd4",
+    "city.compare_empty_chart": "\u5bf9\u6bd4\u56fe\u8868 - \u8bf7\u9009\u62e9\u57ce\u5e02",
+    "city.compare_title_tpl": "{metric} \u591a\u57ce\u5e02\u5bf9\u6bd4\uff08\u8fd17\u65e5\uff09",
     "city.no_data": "\u65e0\u6570\u636e",
     "city.no_data_day": "\u8be5\u65e5\u671f\u6682\u65f6\u65e0\u6570\u636e",
 }

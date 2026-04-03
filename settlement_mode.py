@@ -714,7 +714,7 @@ async function renderSettlementMiniMap(centerCity, dateStr, rows) {
                     return `半径圈：${settlementRadiusKm} km`;
                 }
                 if (params.seriesType === 'scatter' && n === centerCity) {
-                    return `<b>${centerCity}</b><br/>鍒嗘瀽涓績鍩庡競`;
+                    return `<b>${centerCity}</b><br/>分析中心城市`;
                 }
                 return `<b>${n}</b>`;
             }

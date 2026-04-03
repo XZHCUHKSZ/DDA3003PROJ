@@ -261,6 +261,31 @@ function buildCompareSeriesData(entry, cityCount, layoutMap) {
     });
 }
 
+const COMPARE_TREND_CACHE = new Map();
+let compareChartRenderPending = false;
+
+function getCompareTrendValues(cityName, metric, startIdx, endIdx) {
+    const key = cityName + '::' + metric + '::' + startIdx + '::' + endIdx;
+    if (COMPARE_TREND_CACHE.has(key)) return COMPARE_TREND_CACHE.get(key);
+    const out = [];
+    for (let i = startIdx; i <= endIdx; i++) {
+        const d = ALL_DATES[i];
+        if (metric === 'AQI') out.push(CITY_DATA_BY_DATE[d]?.[cityName] ? null);
+        else out.push(POLLUTANTS_DATA[d]?.[cityName]?.[metric] ? null);
+    }
+    COMPARE_TREND_CACHE.set(key, out);
+    return out;
+}
+
+function scheduleCompareChartRender() {
+    if (compareChartRenderPending) return;
+    compareChartRenderPending = true;
+    requestAnimationFrame(() => {
+        compareChartRenderPending = false;
+        scheduleCompareChartRender();
+    });
+}
+
 function enterCompareMode() {
     compareMode = true;
     mapMode = 'compare';
@@ -270,12 +295,12 @@ function enterCompareMode() {
     const detailPanel = document.getElementById('cityDetailPanel');
 
     btn.classList.add('active');
-    label.textContent = '退出对比';
+    label.textContent = t('control.compare.exit');
     document.getElementById('infoPlaceholder').style.display = 'none';
     document.getElementById('infoHeaderContent').style.display = 'flex';
     document.getElementById('infoBody').style.display = 'flex';
     document.getElementById('filterBar').style.display = 'flex';
-    document.getElementById('selectedCityBadge').textContent = '多城市对比';
+    document.getElementById('selectedCityBadge').textContent = t('city.compare_badge');
     document.getElementById('aqiBadge').textContent = '';
     document.getElementById('aqiBadge').style.background = 'transparent';
     document.getElementById('levelBadge').textContent = '';
@@ -290,7 +315,7 @@ function enterCompareMode() {
     }
 
     renderCompareList();
-    renderCompareChart();
+    scheduleCompareChartRender();
     renderMapByState();
     if (typeof onSettlementModeChange === 'function') onSettlementModeChange();
     setTimeout(() => {
@@ -309,7 +334,7 @@ function exitCompareMode(skipRender) {
     const detailPanel = document.getElementById('cityDetailPanel');
 
     btn.classList.remove('active');
-    label.textContent = '对比模式';
+    label.textContent = t('control.compare');
     listPanel.style.display = 'none';
     detailPanel.style.display = 'flex';
 
@@ -366,7 +391,7 @@ function renderCompareList() {
 function removeCompareCity(idx) {
     compareList.splice(idx, 1);
     renderCompareList();
-    renderCompareChart();
+    scheduleCompareChartRender();
     renderMapByState();
 }
 
@@ -416,7 +441,7 @@ function renderCompareChart() {
 
     if (compareList.length === 0) {
         metricsChart.clear();
-        document.getElementById('chartPanelTitle').textContent = '对比图表 - 请选择城市';
+        document.getElementById('chartPanelTitle').textContent = t('city.compare_empty_chart');
         return;
     }
 
@@ -429,10 +454,7 @@ function renderCompareChart() {
     const labelFontSize = getCompareLabelFontSize(cityCount);
 
     const seriesEntries = compareList.map(entry => {
-        const values = dates.map(d => {
-            if (selectedMetric === 'AQI') return CITY_DATA_BY_DATE[d]?.[entry.name] ?? null;
-            return POLLUTANTS_DATA[d]?.[entry.name]?.[selectedMetric] ?? null;
-        });
+        const values = getCompareTrendValues(entry.name, selectedMetric, startIdx, endIdx);
         return {
             name: entry.name,
             color: entry.color,
@@ -457,7 +479,7 @@ function renderCompareChart() {
         })
     }));
 
-    document.getElementById('chartPanelTitle').textContent = name + ' 多城市对比（近7日）';
+    document.getElementById('chartPanelTitle').textContent = t('city.compare_title_tpl').replace('{metric}', name);
     metricsChart.setOption({
         backgroundColor: 'transparent',
         legend: {
