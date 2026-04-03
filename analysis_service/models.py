@@ -21,6 +21,7 @@ class SettlementSnapshot(BaseModel):
 class AnalysisRequest(BaseModel):
     snapshot: SettlementSnapshot
     history: list[dict[str, Any]] = Field(default_factory=list)
+    client_config: dict[str, Any] = Field(default_factory=dict)
 
 
 class Citation(BaseModel):

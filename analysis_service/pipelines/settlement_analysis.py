@@ -137,12 +137,21 @@ def _ensure_specific_cause(cause_text: str, req: AnalysisRequest, profile: dict)
     return (cause_text.rstrip() + ''.join(supplements)).strip()
 
 
-def run_analysis(req: AnalysisRequest) -> AnalysisResponse:
+def run_analysis(req: AnalysisRequest, *, api_key: str = '') -> AnalysisResponse:
     sources, profile = build_default_sources(req.snapshot.city, req.snapshot.metric, req.snapshot.date)
-    provider = BailianClient()
+    client_cfg = req.client_config or {}
+    provider_name = str(client_cfg.get('provider') or 'bailian').strip().lower()
+    model_name = str(client_cfg.get('model') or '').strip()
+    api_base = str(client_cfg.get('base_url') or '').strip()
+
+    provider = BailianClient(
+        api_key=api_key,
+        base_url=api_base,
+        model=model_name,
+    )
     used_fallback = False
 
-    if provider.enabled:
+    if provider.enabled and provider_name in ('bailian', 'openai', 'custom'):
         try:
             model_out = provider.chat_json(SYSTEM_PROMPT, _build_user_prompt(req, sources, profile), timeout=70)
             settlement_text = str(model_out.get('settlement_text', '')).strip()
@@ -167,7 +176,7 @@ def run_analysis(req: AnalysisRequest) -> AnalysisResponse:
     citations = [Citation(**src) for src in selected_sources]
     return AnalysisResponse(
         analysis_id='ana_' + uuid.uuid4().hex[:12],
-        provider='bailian' if provider.enabled and not used_fallback else 'fallback',
+        provider=provider_name if provider.enabled and not used_fallback else 'fallback',
         model=provider.model if provider.enabled else 'rule-template',
         generated_at=datetime.now(timezone.utc).isoformat(),
         settlement_text=settlement_text,

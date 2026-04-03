@@ -696,7 +696,8 @@ function stripSourceMarks(text) {
 
 const AI_CONFIG_STORAGE_KEY = 'APP_AI_SETTINGS';
 const AI_ONLINE_READY_KEY = 'APP_AI_ONLINE_READY';
-let aiRunMode = window.APP_RUN_MODE || localStorage.getItem('APP_RUN_MODE') || 'offline';
+const AI_CONTROL_SERVICE_BASE = 'http://127.0.0.1:8790';
+let aiRunMode = window.APP_RUN_MODE || 'offline';
 let aiRuntimeConfig = {
     baseUrl: AI_ANALYSIS_API_BASE || 'http://127.0.0.1:8787',
     provider: 'bailian',
@@ -741,6 +742,85 @@ function hasValidOnlineConfig() {
     const baseOk = !!(aiRuntimeConfig.baseUrl || '').trim();
     const keyOk = !!(aiRuntimeConfig.apiKey || '').trim();
     return baseOk && keyOk;
+}
+
+function parseBaseHostPort(baseUrl) {
+    try {
+        const u = new URL(baseUrl || '');
+        const host = (u.hostname || '').trim();
+        const port = Number(u.port || (u.protocol === 'https:' ? 443 : 80));
+        return { host, port, protocol: u.protocol };
+    } catch (err) {
+        return null;
+    }
+}
+
+function isLocalAIBase(baseUrl) {
+    const info = parseBaseHostPort(baseUrl);
+    if (!info) return false;
+    return info.host === '127.0.0.1' || info.host === 'localhost';
+}
+
+async function fetchWithTimeout(url, options, timeoutMs) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), Math.max(1000, timeoutMs || 5000));
+    try {
+        return await fetch(url, { ...(options || {}), signal: ctrl.signal });
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+async function checkAIHealth(baseUrl, apiKey) {
+    const headers = {};
+    if (apiKey) headers['X-API-Key'] = apiKey;
+    const resp = await fetchWithTimeout((baseUrl || '').replace(/\\/$/, '') + '/health', {
+        method: 'GET',
+        headers: headers
+    }, 4500);
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    return true;
+}
+
+async function waitAIHealthReady(baseUrl, apiKey, attempts, delayMs) {
+    let lastErr = null;
+    const total = Math.max(1, attempts || 1);
+    for (let i = 0; i < total; i++) {
+        try {
+            await checkAIHealth(baseUrl, apiKey);
+            return true;
+        } catch (err) {
+            lastErr = err;
+            if (i < total - 1) {
+                await new Promise(resolve => setTimeout(resolve, Math.max(200, delayMs || 500)));
+            }
+        }
+    }
+    throw lastErr || new Error('AI service not ready');
+}
+
+async function startLocalAIService(baseUrl) {
+    const info = parseBaseHostPort(baseUrl);
+    if (!info) throw new Error('服务地址格式不正确');
+    const resp = await fetchWithTimeout(AI_CONTROL_SERVICE_BASE + '/api/ai/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            host: info.host,
+            port: info.port,
+            wait_seconds: 10
+        })
+    }, 12000);
+    const data = await resp.json().catch(() => ({}));
+    const msg = String(data.message || '');
+    if (!resp.ok || !data.ok) {
+        // 兼容旧控制器：可能返回500但进程已拉起（health尚在预热）
+        if (msg.includes('started') || msg.includes('timed out') || msg.includes('warming')) {
+            return data;
+        }
+        throw new Error(msg || ('HTTP ' + resp.status));
+    }
+    return data;
 }
 
 function applyAIBaseUrl() {
@@ -811,18 +891,30 @@ async function testAIConnection() {
     if (!hasValidOnlineConfig()) {
         markAIOnlineReady(false);
         setAIConfigStatus('请先填写服务地址和API Key');
+        setAIModeStateText();
         return;
     }
     try {
-        const headers = {};
-        if (aiRuntimeConfig.apiKey) headers['X-API-Key'] = aiRuntimeConfig.apiKey;
-        const resp = await fetch((AI_ANALYSIS_API_BASE || '').replace(/\\/$/, '') + '/health', { method: 'GET', headers: headers });
-        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        await checkAIHealth(AI_ANALYSIS_API_BASE || '', aiRuntimeConfig.apiKey);
         markAIOnlineReady(true);
         setAIConfigStatus('连接成功：服务可用');
     } catch (err) {
-        markAIOnlineReady(false);
-        setAIConfigStatus('连接失败：' + (err?.message || 'unknown error'));
+        try {
+            if (isLocalAIBase(AI_ANALYSIS_API_BASE || '')) {
+                setAIConfigStatus('AI服务未启动，正在自动启动...');
+                await startLocalAIService(AI_ANALYSIS_API_BASE || '');
+                setAIConfigStatus('AI服务已启动，正在等待就绪...');
+                await waitAIHealthReady(AI_ANALYSIS_API_BASE || '', aiRuntimeConfig.apiKey, 8, 600);
+                markAIOnlineReady(true);
+                setAIConfigStatus('AI服务已启动并连接成功');
+            } else {
+                markAIOnlineReady(false);
+                setAIConfigStatus('连接失败：' + (err?.message || 'unknown error'));
+            }
+        } catch (startErr) {
+            markAIOnlineReady(false);
+            setAIConfigStatus('启动/连接失败：' + (startErr?.message || err?.message || 'unknown error'));
+        }
     }
     setAIModeStateText();
 }
@@ -836,6 +928,7 @@ function onAppRunModeChanged(mode) {
         resetAIInsightDisplay('当前为离线模式，AI分析已关闭');
     } else if (!isAIOnlineReady()) {
         resetAIInsightDisplay('在线模式未完成配置，请先在“AI服务设置”中填写地址和API Key并测试连接');
+        openAIConfigDrawer();
     }
 }
 
@@ -1085,7 +1178,8 @@ async function generateAIInsight() {
     const payload = buildAIAnalysisPayload();
     payload.client_config = {
         provider: aiRuntimeConfig.provider,
-        model: aiRuntimeConfig.model
+        model: aiRuntimeConfig.model,
+        base_url: aiRuntimeConfig.baseUrl
     };
     const cacheKey = getCurrentAIContextKey(payload);
 

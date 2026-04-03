@@ -7,10 +7,20 @@ from typing import Any
 
 
 class BailianClient:
-    def __init__(self) -> None:
-        self.api_key = os.getenv('DASHSCOPE_API_KEY', '').strip()
-        self.base_url = os.getenv('BAILIAN_BASE_URL', 'https://dashscope.aliyuncs.com/compatible-mode/v1').rstrip('/')
-        self.model = os.getenv('BAILIAN_MODEL', 'qwen-plus')
+    def __init__(
+        self,
+        *,
+        api_key: str = '',
+        base_url: str = '',
+        model: str = '',
+    ) -> None:
+        env_key = os.getenv('DASHSCOPE_API_KEY', '').strip()
+        env_base = os.getenv('BAILIAN_BASE_URL', 'https://dashscope.aliyuncs.com/compatible-mode/v1').rstrip('/')
+        env_model = os.getenv('BAILIAN_MODEL', 'qwen-plus')
+
+        self.api_key = (api_key or env_key).strip()
+        self.base_url = (base_url or env_base).rstrip('/')
+        self.model = (model or env_model).strip() or 'qwen-plus'
 
     @property
     def enabled(self) -> bool:

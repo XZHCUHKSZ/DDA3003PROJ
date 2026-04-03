@@ -1,6 +1,6 @@
 ﻿from __future__ import annotations
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Header
 from fastapi.middleware.cors import CORSMiddleware
 
 from analysis_service.models import AnalysisRequest, AnalysisResponse
@@ -23,5 +23,8 @@ def health() -> dict[str, str]:
 
 
 @app.post('/api/analysis/settlement', response_model=AnalysisResponse)
-def analyze_settlement(req: AnalysisRequest) -> AnalysisResponse:
-    return run_analysis(req)
+def analyze_settlement(
+    req: AnalysisRequest,
+    x_api_key: str | None = Header(default=None, alias='X-API-Key'),
+) -> AnalysisResponse:
+    return run_analysis(req, api_key=(x_api_key or '').strip())

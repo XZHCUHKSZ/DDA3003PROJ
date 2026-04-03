@@ -12,7 +12,7 @@ from __future__ import annotations
 import argparse
 import os
 
-from run_ai_service import ensure_ai_service_running
+from run_ai_service import ensure_ai_control_service_running, ensure_ai_service_running
 from visualizer import InteractiveAirQualityMap
 
 
@@ -40,6 +40,10 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = _parse_args()
+
+    ctrl_ok, ctrl_msg = ensure_ai_control_service_running(wait_seconds=3.0)
+    ctrl_prefix = "OK" if ctrl_ok else "WARN"
+    print(f"[AI-CTRL][{ctrl_prefix}] {ctrl_msg}")
 
     if args.ai_autostart:
         ok, msg = ensure_ai_service_running()
