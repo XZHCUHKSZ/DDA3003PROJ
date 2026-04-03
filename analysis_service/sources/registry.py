@@ -2,14 +2,16 @@
 
 from datetime import datetime, timezone
 
+from analysis_service.sources.web_context import fetch_city_profile
+
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def build_default_sources() -> list[dict]:
+def build_default_sources(city: str) -> tuple[list[dict], dict]:
     now = _now_iso()
-    return [
+    sources = [
         {
             'id': 'S1',
             'title': '项目本地城市空气质量时序数据',
@@ -25,3 +27,9 @@ def build_default_sources() -> list[dict]:
             'used_fields': ['national_background', 'policy_context'],
         },
     ]
+
+    profile = fetch_city_profile(city)
+    if profile.get('source'):
+        sources.append(profile['source'])
+
+    return sources, profile

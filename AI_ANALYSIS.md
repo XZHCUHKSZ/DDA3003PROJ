@@ -54,3 +54,11 @@ Request example:
   "history": []
 }
 ```
+
+## 5. Evidence expansion
+
+- S1: local settlement snapshot and history from the page state
+- S2: MEE monthly report page (official background)
+- S3: online city profile (Wikipedia summary API), used for economic level and industry keywords
+
+The model is prompted to generate plain-language output for non-technical readers, and each section must include source IDs.
