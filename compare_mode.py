@@ -270,8 +270,8 @@ function getCompareTrendValues(cityName, metric, startIdx, endIdx) {
     const out = [];
     for (let i = startIdx; i <= endIdx; i++) {
         const d = ALL_DATES[i];
-        if (metric === 'AQI') out.push(CITY_DATA_BY_DATE[d]?.[cityName] ? null);
-        else out.push(POLLUTANTS_DATA[d]?.[cityName]?.[metric] ? null);
+        if (metric === 'AQI') out.push(CITY_DATA_BY_DATE[d]?.[cityName] ?? null);
+        else out.push(POLLUTANTS_DATA[d]?.[cityName]?.[metric] ?? null);
     }
     COMPARE_TREND_CACHE.set(key, out);
     return out;
@@ -282,7 +282,7 @@ function scheduleCompareChartRender() {
     compareChartRenderPending = true;
     requestAnimationFrame(() => {
         compareChartRenderPending = false;
-        scheduleCompareChartRender();
+        renderCompareChart();
     });
 }
 
