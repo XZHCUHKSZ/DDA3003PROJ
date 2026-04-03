@@ -466,7 +466,7 @@ function ensureSettlementUI() {
             <button id="settlementCompareBtn" title="切换聚落对比折线">对比</button>
             <div id="settlementMap"></div>
         </div>
-        <div id="settlementMapLegend">颜色沿用主图 AQI 分级；粗边框表示半径圈内地级市；蓝色虚线圈为分析半径。</div>
+        <div id="settlementMapLegend">颜色按当前指标分级；粗边框表示半径圈内地级市；蓝色虚线圈为分析半径。</div>
         <div id="settlementSummary"></div>
         <div id="settlementNarrative">--</div>
     `;
@@ -483,6 +483,9 @@ function ensureSettlementUI() {
                 updateCityPanel();
             } else {
                 renderSettlementAnalysis();
+            }
+            if (typeof refreshAIInsightPanel === 'function') {
+                refreshAIInsightPanel();
             }
         });
     });
@@ -662,6 +665,25 @@ function renderSettlementCompareInMainChart() {
     }, 40);
 }
 
+function getSettlementMetricColor(metric, value) {
+    if (value == null || Number.isNaN(value)) return '#dbe7f3';
+    const pollutantThresholds = {
+        'PM2.5_24h': [35, 75, 115, 150, 250],
+        'PM10_24h': [50, 150, 250, 350, 420],
+        'SO2_24h': [50, 150, 475, 800, 1600],
+        'NO2_24h': [40, 80, 180, 280, 565],
+        'O3_8h': [100, 160, 215, 265, 800],
+        'O3_8h_24h': [100, 160, 215, 265, 800]
+    };
+    const levels = pollutantThresholds[metric];
+    if (!levels) return getAQIColor(value);
+    const colors = ['#22c55e', '#eaf000', '#ff8a00', '#ff2d2d', '#8f3f97', '#7e0023'];
+    for (let i = 0; i < levels.length; i++) {
+        if (value <= levels[i]) return colors[i];
+    }
+    return colors[colors.length - 1];
+}
+
 function updateSettlementSummary(rows, diffusion, centerCity, radiusKm, endIdx) {
     const el = document.getElementById('settlementSummary');
     const narrative = document.getElementById('settlementNarrative');
@@ -708,7 +730,7 @@ function updateSettlementSummary(rows, diffusion, centerCity, radiusKm, endIdx) 
     narrative.innerHTML = `<b>${diffusion.label}</b>：${diffusion.detail}`;
 }
 
-function buildSettlementGeoRegions(features, rows) {
+function buildSettlementGeoRegions(features, rows, dateStr) {
     const rowByNorm = {};
     rows.forEach(row => { rowByNorm[row.norm] = row; });
     return features.map(feature => {
@@ -732,16 +754,18 @@ function buildSettlementGeoRegions(features, rows) {
                 }
             };
         }
+        const metricValue = getSettlementMetricValue(dateStr, row.name);
+        const fillColor = getSettlementMetricColor(selectedMetric, metricValue);
         return {
             name: name,
             itemStyle: {
-                areaColor: getAQIColor(row.aqi),
+                areaColor: fillColor,
                 borderColor: '#213a57',
                 borderWidth: 2.0
             },
             emphasis: {
                 itemStyle: {
-                    areaColor: getAQIColor(row.aqi),
+                    areaColor: fillColor,
                     borderColor: '#0f2238',
                     borderWidth: 2.4
                 }
@@ -786,7 +810,7 @@ async function renderSettlementMiniMap(centerCity, dateStr, rows) {
     if (provinceFeatures.length) {
         mapName = 'settlement_city_map';
         echarts.registerMap(mapName, { type: 'FeatureCollection', features: provinceFeatures });
-        regions = buildSettlementGeoRegions(provinceFeatures, rows);
+        regions = buildSettlementGeoRegions(provinceFeatures, rows, dateStr);
     }
 
     if (settlementViewCenter == null) {
@@ -812,7 +836,11 @@ async function renderSettlementMiniMap(centerCity, dateStr, rows) {
                 const n = params.name || '';
                 const row = rowByName[n];
                 if (row) {
-                    return `<b>${n}</b><br/>AQI: <b>${row.aqi}</b><br/>距中心: <b>${row.distanceKm.toFixed(1)} km</b>`;
+                    const metricName = typeof compareMetricLabel === 'function'
+                        ? compareMetricLabel(selectedMetric)
+                        : selectedMetric;
+                    const metricValue = getSettlementMetricValue(dateStr, row.name);
+                    return `<b>${n}</b><br/>${metricName}: <b>${metricValue ?? '--'}</b><br/>距中心: <b>${row.distanceKm.toFixed(1)} km</b>`;
                 }
                 if (params.seriesType === 'lines') {
                     return `半径圈：${settlementRadiusKm} km`;

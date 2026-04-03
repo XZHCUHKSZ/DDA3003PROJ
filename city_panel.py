@@ -537,6 +537,30 @@ function resetAIInsightDisplay(statusText) {
     if (list) list.innerHTML = '';
 }
 
+const AI_INSIGHT_CACHE = new Map();
+
+function getCurrentAIContextKey(payload) {
+    const snap = payload?.snapshot || {};
+    const city = snap.city || currentCityName || '';
+    const date = snap.date || ALL_DATES[currentDateIndex] || '';
+    const metric = snap.metric || selectedMetric || 'AQI';
+    const radius = snap.radiusKm != null
+        ? Number(snap.radiusKm)
+        : (typeof settlementRadiusKm === 'number' ? settlementRadiusKm : 120);
+    return [city, date, metric, radius].join('::');
+}
+
+function storeAIInsightInCache(cacheKey, insightData) {
+    if (!cacheKey || !insightData) return;
+    AI_INSIGHT_CACHE.set(cacheKey, {
+        settlement_text: insightData.settlement_text || '--',
+        diffusion_text: insightData.diffusion_text || '--',
+        cause_text: insightData.cause_text || '--',
+        citations: Array.isArray(insightData.citations) ? insightData.citations : [],
+        status_text: insightData.status_text || t('ai.empty')
+    });
+}
+
 function renderAICitations(citations) {
     const wrap = document.getElementById('aiSources');
     const list = document.getElementById('aiSourcesList');
@@ -547,17 +571,48 @@ function renderAICitations(citations) {
         return;
     }
     list.innerHTML = citations.map(c => {
-        const title = c.title || c.id || '来源';
+        const title = c.title || c.id || '\u6765\u6e90';
         const href = c.url || '#';
         const time = c.accessed_at ? ('（' + c.accessed_at + '）') : '';
         const fieldText = c.used_fields && c.used_fields.length
             ? (' 字段: ' + c.used_fields.join(', '))
             : '';
-        return '<li><a href=\"' + href + '\" target=\"_blank\" rel=\"noopener noreferrer\">'
+        return '<li><a href="' + href + '" target="_blank" rel="noopener noreferrer">'
             + title + '</a> ' + time + fieldText + '</li>';
     }).join('');
     wrap.style.display = 'block';
 }
+
+function renderAIInsight(insightData, statusText) {
+    const blocks = document.getElementById('aiBlocks');
+    setText('aiSettlementText', insightData?.settlement_text || '--');
+    setText('aiDiffusionText', insightData?.diffusion_text || '--');
+    setText('aiCauseText', insightData?.cause_text || '--');
+    setText('aiStatus', statusText || insightData?.status_text || t('ai.empty'));
+    if (blocks) blocks.style.display = 'grid';
+    renderAICitations(insightData?.citations || []);
+}
+
+function restoreAIInsightFromCache(payload) {
+    const contextPayload = payload || buildAIAnalysisPayload();
+    const key = getCurrentAIContextKey(contextPayload);
+    if (!AI_INSIGHT_CACHE.has(key)) return false;
+    const cached = AI_INSIGHT_CACHE.get(key);
+    renderAIInsight(cached, cached.status_text || t('ai.empty'));
+    return true;
+}
+
+function refreshAIInsightPanel() {
+    if (!currentCityName) {
+        resetAIInsightDisplay(t('ai.empty'));
+        return;
+    }
+    if (!restoreAIInsightFromCache()) {
+        resetAIInsightDisplay(t('ai.empty'));
+    }
+}
+
+window.refreshAIInsightPanel = refreshAIInsightPanel;
 
 function buildAIAnalysisPayload() {
     const snapshotBase = (typeof getCurrentSettlementSnapshot === 'function')
@@ -584,7 +639,6 @@ function buildAIAnalysisPayload() {
 }
 
 function renderLocalFallbackInsight(payload, reasonText) {
-    const blocks = document.getElementById('aiBlocks');
     const snap = payload.snapshot || {};
     const metric = snap.metric || 'AQI';
     const inAvg = snap.in_avg != null ? Number(snap.in_avg).toFixed(1) : '--';
@@ -592,31 +646,35 @@ function renderLocalFallbackInsight(payload, reasonText) {
     const delta = snap.delta_day != null ? ((snap.delta_day >= 0 ? '+' : '') + Number(snap.delta_day).toFixed(1)) : '--';
     const slope = snap.slope_7d != null ? ((snap.slope_7d >= 0 ? '+' : '') + Number(snap.slope_7d).toFixed(2)) : '--';
 
-    setText('aiSettlementText',
-        `${snap.city || currentCityName} 在 ${snap.date || ALL_DATES[currentDateIndex]} 的 ${metric} 聚落结构：`
-        + `内圈均值 ${inAvg}，外圈均值 ${outAvg}，较昨日 ${delta}，7日斜率 ${slope}/天。 [S1]`);
-    setText('aiDiffusionText',
-        `扩散判断：${snap.diffusion_label || '待判定'}。${snap.diffusion_detail || '当前样本有限，建议结合风场数据继续验证。'} [S1][S2]`);
-    setText('aiCauseText',
-        '可能受区域传输、局地排放变化和不利气象条件共同影响。建议联动风速风向、湿度和降水数据进行复核。 [S1][S2]');
-    setText('aiStatus', reasonText || t('ai.err'));
-    if (blocks) blocks.style.display = 'grid';
-    renderAICitations([
-        {
-            id: 'S1',
-            title: '项目本地城市空气质量时序数据',
-            url: 'local://air_quality_dataset/current',
-            accessed_at: new Date().toISOString(),
-            used_fields: ['city', 'date', 'metric', 'inner_avg', 'outer_avg', 'delta_day', 'slope_7d']
-        },
-        {
-            id: 'S2',
-            title: '生态环境部-城市空气质量状况月报',
-            url: 'https://www.mee.gov.cn/hjzl/dqhj/cskqzlzkyb/index.shtml',
-            accessed_at: new Date().toISOString(),
-            used_fields: ['national_background']
-        }
-    ]);
+    const insightData = {
+        settlement_text:
+            `${snap.city || currentCityName} 在 ${snap.date || ALL_DATES[currentDateIndex]} 的 ${metric} 聚落结构：`
+            + `内圈均值 ${inAvg}，外圈均值 ${outAvg}，较昨日 ${delta}，7日斜率 ${slope}/天。[S1]`,
+        diffusion_text:
+            `扩散判断：${snap.diffusion_label || '待判定'}。${snap.diffusion_detail || '当前样本有限，建议结合风场数据继续验证。'} [S1][S2]`,
+        cause_text:
+            '可能受区域传输、局地排放变化和不利气象条件共同影响。建议联动风速风向、湿度和降水数据进行复核。[S1][S2]',
+        citations: [
+            {
+                id: 'S1',
+                title: '项目本地城市空气质量时序数据',
+                url: 'local://air_quality_dataset/current',
+                accessed_at: new Date().toISOString(),
+                used_fields: ['city', 'date', 'metric', 'inner_avg', 'outer_avg', 'delta_day', 'slope_7d']
+            },
+            {
+                id: 'S2',
+                title: '生态环境部-城市空气质量状况月报',
+                url: 'https://www.mee.gov.cn/hjzl/dqhj/cskqzlzkyb/index.shtml',
+                accessed_at: new Date().toISOString(),
+                used_fields: ['national_background']
+            }
+        ],
+        status_text: reasonText || t('ai.err')
+    };
+
+    renderAIInsight(insightData, insightData.status_text);
+    storeAIInsightInCache(getCurrentAIContextKey(payload), insightData);
 }
 
 async function generateAIInsight() {
@@ -630,8 +688,10 @@ async function generateAIInsight() {
     setText('aiStatus', t('ai.loading'));
     if (blocks) blocks.style.display = 'none';
 
+    const payload = buildAIAnalysisPayload();
+    const cacheKey = getCurrentAIContextKey(payload);
+
     try {
-        const payload = buildAIAnalysisPayload();
         const resp = await fetch(AI_ANALYSIS_API_BASE + '/api/analysis/settlement', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -640,18 +700,21 @@ async function generateAIInsight() {
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
         const data = await resp.json();
 
-        setText('aiSettlementText', data.settlement_text || '--');
-        setText('aiDiffusionText', data.diffusion_text || '--');
-        setText('aiCauseText', data.cause_text || '--');
-        if (data.used_fallback) {
-            setText('aiStatus', '服务已连接，当前为后端本地回退模式（未配置百炼Key）');
-        } else {
-            setText('aiStatus', '模型: ' + (data.model || '--') + ' | 置信度: ' + Math.round((data.confidence || 0) * 100) + '%');
-        }
-        if (blocks) blocks.style.display = 'grid';
-        renderAICitations(data.citations || []);
+        const statusText = data.used_fallback
+            ? 'AI 服务已连接，当前为后端本地回退模式（未配置百炼 Key）'
+            : ('模型: ' + (data.model || '--') + ' | 置信度 ' + Math.round((data.confidence || 0) * 100) + '%');
+
+        const insightData = {
+            settlement_text: data.settlement_text || '--',
+            diffusion_text: data.diffusion_text || '--',
+            cause_text: data.cause_text || '--',
+            citations: data.citations || [],
+            status_text: statusText
+        };
+
+        renderAIInsight(insightData, statusText);
+        storeAIInsightInCache(cacheKey, insightData);
     } catch (err) {
-        const payload = buildAIAnalysisPayload();
         renderLocalFallbackInsight(payload, t('ai.err') + '（未连接分析服务）');
     } finally {
         if (btn) btn.disabled = false;
@@ -668,7 +731,7 @@ function openCityDetail(cityName) {
     document.getElementById('compareBtn').style.display = 'inline-flex';
     setText('selectedCityBadge', cityName);
     setText('chartPanelTitle', cityName + ' - ' + t('city.trend7d'));
-    resetAIInsightDisplay(t('ai.empty'));
+    refreshAIInsightPanel();
     if (typeof renderSettlementAnalysis === 'function') {
         renderSettlementAnalysis();
     }
@@ -757,6 +820,7 @@ function updateCityPanel() {
     if (typeof renderSettlementAnalysis === 'function') {
         renderSettlementAnalysis();
     }
+    refreshAIInsightPanel();
 }
 
 function renderLineChart() {
@@ -894,7 +958,7 @@ document.querySelectorAll('.filter-btn').forEach(btn => {
             renderCompareChart();
         } else {
             updateCityPanel();
-            resetAIInsightDisplay(t('ai.empty'));
+            refreshAIInsightPanel();
         }
     });
 });
@@ -903,3 +967,4 @@ document.getElementById('aiGenerateBtn')?.addEventListener('click', () => {
     generateAIInsight();
 });
 """
+
