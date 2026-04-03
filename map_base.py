@@ -470,6 +470,9 @@ function syncMapSubtitle() {
 let bootOverlayDone = false;
 let bootReadyToEnter = false;
 let appRunMode = (localStorage.getItem('APP_RUN_MODE') || '').trim();
+if (appRunMode === 'online' && localStorage.getItem('APP_AI_ONLINE_READY') !== '1') {
+    appRunMode = '';
+}
 
 function syncBootModeUI() {
     const offlineBtn = byId('bootModeOffline');
@@ -500,6 +503,16 @@ function notifyRunModeChanged() {
 
 function setAppRunMode(mode) {
     if (mode !== 'offline' && mode !== 'online') return;
+    if (mode === 'online' && localStorage.getItem('APP_AI_ONLINE_READY') !== '1') {
+        const tip = byId('bootModeTip');
+        if (tip) {
+            tip.textContent = '在线模式需要先完成AI服务设置并测试连接';
+        }
+        if (typeof window.openAIConfigFromBoot === 'function') {
+            window.openAIConfigFromBoot();
+        }
+        return;
+    }
     appRunMode = mode;
     localStorage.setItem('APP_RUN_MODE', mode);
     syncBootModeUI();

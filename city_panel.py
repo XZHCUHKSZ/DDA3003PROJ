@@ -687,6 +687,7 @@ function withAIDisclaimer(text) {
 }
 
 const AI_CONFIG_STORAGE_KEY = 'APP_AI_SETTINGS';
+const AI_ONLINE_READY_KEY = 'APP_AI_ONLINE_READY';
 let aiRunMode = window.APP_RUN_MODE || localStorage.getItem('APP_RUN_MODE') || 'offline';
 let aiRuntimeConfig = {
     baseUrl: AI_ANALYSIS_API_BASE || 'http://127.0.0.1:8787',
@@ -720,6 +721,20 @@ function persistAIRuntimeConfig() {
     localStorage.setItem(AI_CONFIG_STORAGE_KEY, JSON.stringify(cfg));
 }
 
+function markAIOnlineReady(ready) {
+    localStorage.setItem(AI_ONLINE_READY_KEY, ready ? '1' : '0');
+}
+
+function isAIOnlineReady() {
+    return localStorage.getItem(AI_ONLINE_READY_KEY) === '1';
+}
+
+function hasValidOnlineConfig() {
+    const baseOk = !!(aiRuntimeConfig.baseUrl || '').trim();
+    const keyOk = !!(aiRuntimeConfig.apiKey || '').trim();
+    return baseOk && keyOk;
+}
+
 function applyAIBaseUrl() {
     const base = (aiRuntimeConfig.baseUrl || '').trim();
     if (base) {
@@ -731,9 +746,10 @@ function applyAIBaseUrl() {
 function setAIModeStateText() {
     const modeEl = document.getElementById('aiModeState');
     if (!modeEl) return;
+    const readyText = isAIOnlineReady() ? '已完成在线配置' : '未完成在线配置';
     modeEl.textContent = aiRunMode === 'online'
-        ? '在线模式（可使用AI分析）'
-        : '离线模式（仅本地数据，不请求AI服务）';
+        ? ('在线模式（可使用AI分析） | ' + readyText)
+        : ('离线模式（仅本地数据，不请求AI服务） | ' + readyText);
 }
 
 function syncAIConfigFormFromState() {
@@ -783,26 +799,40 @@ async function testAIConnection() {
     readAIConfigFormToState();
     applyAIBaseUrl();
     setAIConfigStatus('正在测试连接...');
+    if (!hasValidOnlineConfig()) {
+        markAIOnlineReady(false);
+        setAIConfigStatus('请先填写服务地址和API Key');
+        return;
+    }
     try {
-        const resp = await fetch((AI_ANALYSIS_API_BASE || '').replace(/\\/$/, '') + '/health', { method: 'GET' });
+        const headers = {};
+        if (aiRuntimeConfig.apiKey) headers['X-API-Key'] = aiRuntimeConfig.apiKey;
+        const resp = await fetch((AI_ANALYSIS_API_BASE || '').replace(/\\/$/, '') + '/health', { method: 'GET', headers: headers });
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        markAIOnlineReady(true);
         setAIConfigStatus('连接成功：服务可用');
     } catch (err) {
+        markAIOnlineReady(false);
         setAIConfigStatus('连接失败：' + (err?.message || 'unknown error'));
     }
+    setAIModeStateText();
 }
 
 function onAppRunModeChanged(mode) {
     aiRunMode = mode || 'offline';
     setAIModeStateText();
     const btn = document.getElementById('aiGenerateBtn');
-    if (btn) btn.disabled = (aiRunMode !== 'online');
+    if (btn) btn.disabled = (aiRunMode !== 'online' || !isAIOnlineReady());
     if (aiRunMode !== 'online') {
         resetAIInsightDisplay('当前为离线模式，AI分析已关闭');
+    } else if (!isAIOnlineReady()) {
+        resetAIInsightDisplay('在线模式未完成配置，请先在“AI服务设置”中填写地址和API Key并测试连接');
     }
 }
 
 window.onAppRunModeChanged = onAppRunModeChanged;
+window.isAIOnlineConfigured = () => isAIOnlineReady();
+window.openAIConfigFromBoot = () => openAIConfigDrawer();
 
 let aiProgressTimer = null;
 
@@ -945,6 +975,10 @@ function refreshAIInsightPanel() {
         resetAIInsightDisplay('当前为离线模式，AI分析已关闭');
         return;
     }
+    if (!isAIOnlineReady()) {
+        resetAIInsightDisplay('在线模式未完成配置，请先在“AI服务设置”中填写地址和API Key并测试连接');
+        return;
+    }
     if (!restoreAIInsightFromCache()) {
         resetAIInsightDisplay(t('ai.empty'));
     }
@@ -1018,6 +1052,11 @@ function renderLocalFallbackInsight(payload, reasonText) {
 async function generateAIInsight() {
     if (aiRunMode !== 'online') {
         setText('aiStatus', withAIDisclaimer('当前为离线模式，无法发起AI分析'));
+        return;
+    }
+    if (!isAIOnlineReady()) {
+        setText('aiStatus', withAIDisclaimer('在线模式未完成配置，请先配置并测试连接'));
+        openAIConfigDrawer();
         return;
     }
     if (!currentCityName) {
@@ -1338,9 +1377,12 @@ document.getElementById('aiSaveConfigBtn')?.addEventListener('click', async () =
     readAIConfigFormToState();
     applyAIBaseUrl();
     persistAIRuntimeConfig();
-    setAIConfigStatus('配置已保存并应用');
     await testAIConnection();
+    if (isAIOnlineReady()) {
+        setAIConfigStatus('配置已保存并应用');
+    }
     closeAIConfigDrawer();
+    onAppRunModeChanged(aiRunMode);
 });
 
 loadAIRuntimeConfig();
