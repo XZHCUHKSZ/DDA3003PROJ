@@ -470,8 +470,7 @@ function syncMapSubtitle() {
 
 let bootOverlayDone = false;
 let bootReadyToEnter = false;
-const savedRunMode = (localStorage.getItem('APP_RUN_MODE') || '').trim();
-let appRunMode = savedRunMode === 'offline' ? 'offline' : '';
+let appRunMode = '';
 
 function syncBootModeUI() {
     const offlineBtn = byId('bootModeOffline');
@@ -493,6 +492,18 @@ function canEnterBoot() {
     return appRunMode === 'offline' || appRunMode === 'online';
 }
 
+function refreshBootEnterByMode() {
+    const enterBtn = byId('bootEnter');
+    if (!enterBtn) return;
+    if (canEnterBoot()) {
+        enterBtn.textContent = t('loader.enter.ready');
+        enterBtn.classList.add('ready');
+    } else {
+        enterBtn.textContent = '请选择模式';
+        enterBtn.classList.remove('ready');
+    }
+}
+
 function notifyRunModeChanged() {
     window.APP_RUN_MODE = appRunMode || 'offline';
     if (typeof window.onAppRunModeChanged === 'function') {
@@ -510,8 +521,7 @@ function setAppRunMode(mode) {
         localStorage.removeItem('APP_AI_NEED_SETUP');
     }
     syncBootModeUI();
-    byId('bootEnter')?.classList.add('ready');
-    byId('bootEnter') && (byId('bootEnter').textContent = t('loader.enter.ready'));
+    refreshBootEnterByMode();
     notifyRunModeChanged();
 }
 
@@ -537,15 +547,7 @@ function markBootReady() {
     byId('bootOverlay')?.classList.add('ready');
     setBootStatus(t('loader.status.ready'), t('loader.sub.ready'));
     if (hint) hint.textContent = t('loader.hint.ready');
-    if (enterBtn) {
-        if (canEnterBoot()) {
-            enterBtn.textContent = t('loader.enter.ready');
-            enterBtn.classList.add('ready');
-        } else {
-            enterBtn.textContent = '请选择模式';
-            enterBtn.classList.remove('ready');
-        }
-    }
+    if (enterBtn) refreshBootEnterByMode();
 }
 
 function hideBootOverlay() {
@@ -626,9 +628,10 @@ const bootHint = byId('bootHint');
 const bootEnter = byId('bootEnter');
 const bootRetry = byId('bootRetry');
 if (bootHint) bootHint.textContent = t('loader.hint.default');
-if (bootEnter) bootEnter.textContent = t('loader.enter.loading');
+if (bootEnter) bootEnter.textContent = '请选择模式';
 if (bootRetry) bootRetry.textContent = t('loader.retry');
 syncBootModeUI();
+refreshBootEnterByMode();
 if (appRunMode === 'offline' || appRunMode === 'online') {
     notifyRunModeChanged();
 }

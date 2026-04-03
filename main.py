@@ -31,9 +31,9 @@ def _parse_args() -> argparse.Namespace:
         help="Output directory path (auto-created if not exists)",
     )
     parser.add_argument(
-        "--no-ai-autostart",
+        "--ai-autostart",
         action="store_true",
-        help="Do not auto-start local AI service",
+        help="Auto-start local AI service before rendering map",
     )
     return parser.parse_args()
 
@@ -41,12 +41,12 @@ def _parse_args() -> argparse.Namespace:
 def main() -> None:
     args = _parse_args()
 
-    if not args.no_ai_autostart:
+    if args.ai_autostart:
         ok, msg = ensure_ai_service_running()
         prefix = "OK" if ok else "WARN"
         print(f"[AI][{prefix}] {msg}")
     else:
-        print("[AI] Auto-start skipped (--no-ai-autostart).")
+        print("[AI] Auto-start skipped by default. Use --ai-autostart to enable.")
 
     if not os.path.exists(args.data):
         print(f"\n[ERROR] Data file not found: {args.data}")
@@ -61,4 +61,3 @@ def main() -> None:
 if __name__ == "__main__":
     main()
     input("\nPress Enter to exit...")
-
