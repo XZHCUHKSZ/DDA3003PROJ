@@ -114,7 +114,7 @@ def build_css() -> str:
 #settlementSummary {
     margin-top: 10px;
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
     gap: 8px;
 }
 .settlement-kpi {
@@ -160,9 +160,12 @@ let settlementProvinceGeoCache = {};
 let settlementViewZoom = null;
 let settlementViewCenter = null;
 let settlementCompareMode = false;
+let settlementLastCenterCity = '';
 const settlementRadiusRowsCache = new Map();
 const settlementDiffusionCache = new Map();
 const settlementTrendCache = new Map();
+const settlementBandSeriesCache = new Map();
+const settlementCircleAvgCache = new Map();
 
 function normalizeCnCityName(name) {
     if (!name) return '';
@@ -331,6 +334,43 @@ function getSettlementTrendValues(cityName, metric, startIdx, endIdx) {
         out.push(getSettlementMetricValue(ALL_DATES[i], cityName));
     }
     settlementTrendCache.set(key, out);
+    return out;
+}
+
+function getSettlementBandSeries(centerCity, radiusKm, startIdx, endIdx) {
+    const key = centerCity + '::' + radiusKm + '::' + startIdx + '::' + endIdx;
+    if (settlementBandSeriesCache.has(key)) {
+        return settlementBandSeriesCache.get(key);
+    }
+    const split = radiusKm / 2;
+    const near = [];
+    const outer = [];
+    for (let i = startIdx; i <= endIdx; i++) {
+        const rows = getRadiusRows(centerCity, ALL_DATES[i], radiusKm);
+        if (!rows.length) {
+            near.push(null);
+            outer.push(null);
+            continue;
+        }
+        near.push(mean(rows.filter(r => r.distanceKm <= split).map(r => r.aqi)));
+        outer.push(mean(rows.filter(r => r.distanceKm > split).map(r => r.aqi)));
+    }
+    const result = { near, outer };
+    settlementBandSeriesCache.set(key, result);
+    return result;
+}
+
+function getSettlementCircleAvgSeries(centerCity, radiusKm, startIdx, endIdx) {
+    const key = centerCity + '::' + radiusKm + '::avg::' + startIdx + '::' + endIdx;
+    if (settlementCircleAvgCache.has(key)) {
+        return settlementCircleAvgCache.get(key);
+    }
+    const out = [];
+    for (let i = startIdx; i <= endIdx; i++) {
+        const rows = getRadiusRows(centerCity, ALL_DATES[i], radiusKm);
+        out.push(rows.length ? mean(rows.map(r => r.aqi)) : null);
+    }
+    settlementCircleAvgCache.set(key, out);
     return out;
 }
 
@@ -536,12 +576,35 @@ function renderSettlementCompareInMainChart() {
             hideOverlap: cityCount > 7 && params.data && params.data.labelPriority < 3
         })
     }));
+    const bandSeries = getSettlementBandSeries(currentCityName, settlementRadiusKm, startIdx, endIdx);
+    series.push({
+        name: '中心圈均值',
+        type: 'line',
+        data: bandSeries.near,
+        smooth: true,
+        connectNulls: false,
+        symbolSize: 6,
+        lineStyle: { color: '#1f2937', width: 2, type: 'dashed' },
+        itemStyle: { color: '#1f2937' },
+        label: { show: false }
+    });
+    series.push({
+        name: '外圈均值',
+        type: 'line',
+        data: bandSeries.outer,
+        smooth: true,
+        connectNulls: false,
+        symbolSize: 6,
+        lineStyle: { color: '#64748b', width: 2, type: 'dashed' },
+        itemStyle: { color: '#64748b' },
+        label: { show: false }
+    });
 
     metricsChart.setOption({
         backgroundColor: 'transparent',
         legend: {
             type: 'scroll',
-            data: selectedRows.map(r => r.name),
+            data: selectedRows.map(r => r.name).concat(['中心圈均值', '外圈均值']),
             bottom: 0,
             textStyle: { color: '#6b8cba', fontSize: Math.max(10, labelFontSize + 1) },
             itemWidth: 14,
@@ -586,7 +649,7 @@ function renderSettlementCompareInMainChart() {
     }, 40);
 }
 
-function updateSettlementSummary(rows, diffusion) {
+function updateSettlementSummary(rows, diffusion, centerCity, radiusKm, endIdx) {
     const el = document.getElementById('settlementSummary');
     const narrative = document.getElementById('settlementNarrative');
     if (!el || !narrative) return;
@@ -594,11 +657,29 @@ function updateSettlementSummary(rows, diffusion) {
     const avg = mean(rows.map(r => r.aqi));
     const peak = rows.length ? rows.reduce((m, r) => r.aqi > m.aqi ? r : m, rows[0]) : null;
     const count = rows.length;
+    const startIdx = Math.max(0, endIdx - 6);
+    const avg7d = getSettlementCircleAvgSeries(centerCity, radiusKm, startIdx, endIdx);
+    const todayAvg = avg7d[avg7d.length - 1];
+    const prevAvg = avg7d.length > 1 ? avg7d[avg7d.length - 2] : null;
+    const delta = (todayAvg != null && prevAvg != null) ? (todayAvg - prevAvg) : null;
+    let slope = null;
+    const valid = avg7d
+        .map((v, i) => ({ v, i }))
+        .filter(p => p.v != null && !Number.isNaN(p.v));
+    if (valid.length >= 2) {
+        const first = valid[0];
+        const last = valid[valid.length - 1];
+        slope = (last.v - first.v) / Math.max(1, last.i - first.i);
+    }
+    const deltaText = delta == null ? '--' : `${delta >= 0 ? '+' : ''}${delta.toFixed(1)}`;
+    const slopeText = slope == null ? '--' : `${slope >= 0 ? '+' : ''}${slope.toFixed(2)} AQI/天`;
 
     el.innerHTML = `
         <div class="settlement-kpi"><div class="k">圈内城市数</div><div class="v">${count}</div></div>
         <div class="settlement-kpi"><div class="k">圈内平均 AQI</div><div class="v">${avg != null ? avg.toFixed(1) : '--'}</div></div>
         <div class="settlement-kpi"><div class="k">峰值城市</div><div class="v">${peak ? peak.name + ' ' + peak.aqi : '--'}</div></div>
+        <div class="settlement-kpi"><div class="k">较昨日变化</div><div class="v">${deltaText}</div></div>
+        <div class="settlement-kpi"><div class="k">7日斜率</div><div class="v">${slopeText}</div></div>
     `;
 
     narrative.innerHTML = `<b>${diffusion.label}</b>：${diffusion.detail}`;
@@ -828,13 +909,18 @@ async function renderSettlementAnalysis() {
         return;
     }
     panel.style.display = 'block';
+    if (settlementLastCenterCity !== currentCityName) {
+        settlementLastCenterCity = currentCityName;
+        settlementViewZoom = null;
+        settlementViewCenter = null;
+    }
     const compareBtn = document.getElementById('settlementCompareBtn');
     compareBtn?.classList.toggle('active', settlementCompareMode);
 
     const dateStr = ALL_DATES[currentDateIndex];
     const rows = getRadiusRows(currentCityName, dateStr, settlementRadiusKm);
     const diffusion = describeDiffusion(currentCityName, settlementRadiusKm, currentDateIndex);
-    updateSettlementSummary(rows, diffusion);
+    updateSettlementSummary(rows, diffusion, currentCityName, settlementRadiusKm, currentDateIndex);
 
     if (!rows.length) {
         const narrative = document.getElementById('settlementNarrative');
