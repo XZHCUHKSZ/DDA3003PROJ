@@ -388,10 +388,7 @@ function getSettlementCircleAvgSeries(centerCity, radiusKm, startIdx, endIdx, me
 }
 
 function getDefaultSettlementZoom(radiusKm) {
-    if (radiusKm <= 80) return 7.0;
-    if (radiusKm <= 120) return 6.4;
-    if (radiusKm <= 180) return 5.8;
-    return 5.2;
+    return 2.6;
 }
 
 function buildCircleCoords(center, radiusKm, steps = 84) {
@@ -697,13 +694,15 @@ function updateSettlementSummary(rows, diffusion, centerCity, radiusKm, endIdx) 
         .map(r => ({ name: r.name, value: getSettlementMetricValue(dateStr, r.name) }))
         .filter(r => r.value != null && !Number.isNaN(r.value));
     const avg = mean(metricRows.map(r => r.value));
-    const peak = rows.length ? rows.reduce((m, r) => r.aqi > m.aqi ? r : m, rows[0]) : null;
     const count = rows.length;
     const startIdx = Math.max(0, endIdx - 6);
     const avg7d = getSettlementCircleAvgSeries(centerCity, radiusKm, startIdx, endIdx, selectedMetric);
     const todayAvg = avg7d[avg7d.length - 1];
     const prevAvg = avg7d.length > 1 ? avg7d[avg7d.length - 2] : null;
-    const delta = (todayAvg != null && prevAvg != null) ? (todayAvg - prevAvg) : null;
+    const circleDelta = (todayAvg != null && prevAvg != null) ? (todayAvg - prevAvg) : null;
+    const centerToday = getSettlementMetricValue(ALL_DATES[endIdx], centerCity);
+    const centerPrev = endIdx > 0 ? getSettlementMetricValue(ALL_DATES[endIdx - 1], centerCity) : null;
+    const centerDelta = (centerToday != null && centerPrev != null) ? (centerToday - centerPrev) : null;
     let slope = null;
     const valid = avg7d
         .map((v, i) => ({ v, i }))
@@ -713,7 +712,8 @@ function updateSettlementSummary(rows, diffusion, centerCity, radiusKm, endIdx) 
         const last = valid[valid.length - 1];
         slope = (last.v - first.v) / Math.max(1, last.i - first.i);
     }
-    const deltaText = delta == null ? '--' : `${delta >= 0 ? '+' : ''}${delta.toFixed(1)}`;
+    const circleDeltaText = circleDelta == null ? '--' : `${circleDelta >= 0 ? '+' : ''}${circleDelta.toFixed(1)}`;
+    const centerDeltaText = centerDelta == null ? '--' : `${centerDelta >= 0 ? '+' : ''}${centerDelta.toFixed(1)}`;
     const slopeText = slope == null ? '--' : `${slope >= 0 ? '+' : ''}${slope.toFixed(2)} /天`;
     const peakMetric = metricRows.length
         ? metricRows.reduce((m, r) => r.value > m.value ? r : m, metricRows[0])
@@ -723,8 +723,9 @@ function updateSettlementSummary(rows, diffusion, centerCity, radiusKm, endIdx) 
         <div class="settlement-kpi"><div class="k">圈内城市数</div><div class="v">${count}</div></div>
         <div class="settlement-kpi"><div class="k">圈内平均 ${metricName}</div><div class="v">${avg != null ? avg.toFixed(1) : '--'}</div></div>
         <div class="settlement-kpi"><div class="k">峰值城市</div><div class="v">${peakMetric ? peakMetric.name + ' ' + peakMetric.value : '--'}</div></div>
-        <div class="settlement-kpi"><div class="k">较昨日变化</div><div class="v">${deltaText}</div></div>
-        <div class="settlement-kpi"><div class="k">7日斜率</div><div class="v">${slopeText}</div></div>
+        <div class="settlement-kpi"><div class="k">中心城较昨日</div><div class="v">${centerDeltaText}</div></div>
+        <div class="settlement-kpi"><div class="k">圈均较昨日</div><div class="v">${circleDeltaText}</div></div>
+        <div class="settlement-kpi"><div class="k">圈均7日斜率</div><div class="v">${slopeText}</div></div>
     `;
 
     narrative.innerHTML = `<b>${diffusion.label}</b>：${diffusion.detail}`;
