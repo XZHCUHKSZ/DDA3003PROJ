@@ -921,6 +921,59 @@ function onSettlementModeChange() {
     renderSettlementAnalysis();
 }
 
+function getCurrentSettlementSnapshot() {
+    if (!currentCityName) return null;
+    const endIdx = currentDateIndex;
+    const startIdx = Math.max(0, endIdx - 6);
+    const dateStr = ALL_DATES[endIdx];
+    const rows = getRadiusRows(currentCityName, dateStr, settlementRadiusKm);
+    if (!rows.length) return null;
+
+    const split = settlementRadiusKm / 2;
+    const inValues = rows
+        .filter(r => r.distanceKm <= split)
+        .map(r => getSettlementMetricValue(dateStr, r.name))
+        .filter(v => v != null && !Number.isNaN(v));
+    const outValues = rows
+        .filter(r => r.distanceKm > split)
+        .map(r => getSettlementMetricValue(dateStr, r.name))
+        .filter(v => v != null && !Number.isNaN(v));
+
+    const avg7d = getSettlementCircleAvgSeries(currentCityName, settlementRadiusKm, startIdx, endIdx, selectedMetric);
+    const todayAvg = avg7d[avg7d.length - 1];
+    const prevAvg = avg7d.length > 1 ? avg7d[avg7d.length - 2] : null;
+    const delta = (todayAvg != null && prevAvg != null) ? (todayAvg - prevAvg) : null;
+
+    let slope = null;
+    const valid = avg7d.map((v, i) => ({ v, i })).filter(p => p.v != null && !Number.isNaN(p.v));
+    if (valid.length >= 2) {
+        slope = (valid[valid.length - 1].v - valid[0].v) / Math.max(1, valid[valid.length - 1].i - valid[0].i);
+    }
+
+    const band = getSettlementBandSeries(currentCityName, settlementRadiusKm, startIdx, endIdx, selectedMetric);
+    const history = [];
+    for (let i = startIdx; i <= endIdx; i++) {
+        history.push({
+            date: ALL_DATES[i],
+            in_avg: band.near[i - startIdx],
+            out_avg: band.outer[i - startIdx],
+            circle_avg: avg7d[i - startIdx]
+        });
+    }
+
+    const diffusion = describeDiffusion(currentCityName, settlementRadiusKm, endIdx);
+    return {
+        in_count: rows.length,
+        in_avg: mean(inValues),
+        out_avg: mean(outValues),
+        delta_day: delta,
+        slope_7d: slope,
+        diffusion_label: diffusion.label,
+        diffusion_detail: diffusion.detail,
+        history: history
+    };
+}
+
 async function renderSettlementAnalysis() {
     ensureSettlementUI();
     const panel = document.getElementById('settlementPanel');

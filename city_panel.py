@@ -268,6 +268,97 @@ def build_css() -> str:
     padding: 5px 12px;
     flex-shrink: 0;
 }
+
+#aiInsightSection {
+    margin: 0 24px 30px;
+    background: #ffffff;
+    border: 1px solid #dde8f5;
+    border-radius: 14px;
+    box-shadow: 0 2px 12px rgba(21,101,192,0.06);
+    padding: 14px 16px;
+}
+#aiInsightHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+#aiInsightTitle {
+    font-size: 15px;
+    color: #1a2a4a;
+    font-weight: 800;
+}
+#aiInsightSub {
+    margin-top: 4px;
+    font-size: 12px;
+    color: #7a9cc0;
+}
+#aiGenerateBtn {
+    border: 1px solid #8db6e4;
+    background: #1565c0;
+    color: #fff;
+    border-radius: 999px;
+    padding: 7px 14px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+}
+#aiGenerateBtn[disabled] {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+#aiStatus {
+    margin-top: 10px;
+    font-size: 12px;
+    color: #6b8cba;
+}
+#aiBlocks {
+    margin-top: 12px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 10px;
+}
+.ai-block {
+    background: #f8fbff;
+    border: 1px solid #e4eef9;
+    border-radius: 10px;
+    padding: 10px 11px;
+}
+.ai-block h4 {
+    margin: 0 0 6px 0;
+    color: #5f83ad;
+    font-size: 12px;
+    font-weight: 800;
+}
+.ai-block p {
+    margin: 0;
+    color: #2a4262;
+    font-size: 13px;
+    line-height: 1.65;
+    white-space: pre-wrap;
+}
+#aiSources {
+    margin-top: 10px;
+    border-top: 1px dashed #dbe8f6;
+    padding-top: 10px;
+}
+#aiSources ul {
+    margin: 0;
+    padding-left: 18px;
+}
+#aiSources li {
+    color: #4a6a8a;
+    font-size: 12px;
+    margin-bottom: 4px;
+}
+#aiSources a {
+    color: #1565c0;
+    text-decoration: none;
+}
+#aiSources a:hover {
+    text-decoration: underline;
+}
 """
 
 
@@ -362,6 +453,35 @@ def build_dom(all_dates: list[str], current_index: int) -> str:
         </div>
     </div>
 
+    <div id="aiInsightSection" style="display:none;">
+        <div id="aiInsightHeader">
+            <div>
+                <div id="aiInsightTitle">{ui_texts.get("ai.title")}</div>
+                <div id="aiInsightSub">{ui_texts.get("ai.subtitle")}</div>
+            </div>
+            <button id="aiGenerateBtn" type="button">{ui_texts.get("ai.btn")}</button>
+        </div>
+        <div id="aiStatus">{ui_texts.get("ai.empty")}</div>
+        <div id="aiBlocks" style="display:none;">
+            <div class="ai-block">
+                <h4>{ui_texts.get("ai.section.settlement")}</h4>
+                <p id="aiSettlementText">--</p>
+            </div>
+            <div class="ai-block">
+                <h4>{ui_texts.get("ai.section.diffusion")}</h4>
+                <p id="aiDiffusionText">--</p>
+            </div>
+            <div class="ai-block">
+                <h4>{ui_texts.get("ai.section.causes")}</h4>
+                <p id="aiCauseText">--</p>
+            </div>
+        </div>
+        <div id="aiSources" style="display:none;">
+            <div style="font-size:12px;color:#5f83ad;font-weight:800;margin-bottom:6px;">{ui_texts.get("ai.section.sources")}</div>
+            <ul id="aiSourcesList"></ul>
+        </div>
+    </div>
+
 </div>
 """
 
@@ -404,15 +524,111 @@ function setText(id, text) {
     if (el) el.textContent = text;
 }
 
+function resetAIInsightDisplay(statusText) {
+    const blocks = document.getElementById('aiBlocks');
+    const sources = document.getElementById('aiSources');
+    const list = document.getElementById('aiSourcesList');
+    setText('aiStatus', statusText || t('ai.empty'));
+    setText('aiSettlementText', '--');
+    setText('aiDiffusionText', '--');
+    setText('aiCauseText', '--');
+    if (blocks) blocks.style.display = 'none';
+    if (sources) sources.style.display = 'none';
+    if (list) list.innerHTML = '';
+}
+
+function renderAICitations(citations) {
+    const wrap = document.getElementById('aiSources');
+    const list = document.getElementById('aiSourcesList');
+    if (!wrap || !list) return;
+    if (!citations || !citations.length) {
+        wrap.style.display = 'none';
+        list.innerHTML = '';
+        return;
+    }
+    list.innerHTML = citations.map(c => {
+        const title = c.title || c.id || '来源';
+        const href = c.url || '#';
+        const time = c.accessed_at ? ('（' + c.accessed_at + '）') : '';
+        const fieldText = c.used_fields && c.used_fields.length
+            ? (' 字段: ' + c.used_fields.join(', '))
+            : '';
+        return '<li><a href=\"' + href + '\" target=\"_blank\" rel=\"noopener noreferrer\">'
+            + title + '</a> ' + time + fieldText + '</li>';
+    }).join('');
+    wrap.style.display = 'block';
+}
+
+function buildAIAnalysisPayload() {
+    const snapshotBase = (typeof getCurrentSettlementSnapshot === 'function')
+        ? getCurrentSettlementSnapshot()
+        : null;
+    const dateStr = ALL_DATES[currentDateIndex];
+    const fallbackAQI = CITY_DATA_BY_DATE[dateStr]?.[currentCityName] ?? null;
+    return {
+        snapshot: {
+            city: currentCityName,
+            date: dateStr,
+            metric: selectedMetric,
+            radiusKm: typeof settlementRadiusKm === 'number' ? settlementRadiusKm : 120,
+            in_count: snapshotBase?.in_count ?? null,
+            in_avg: snapshotBase?.in_avg ?? fallbackAQI,
+            out_avg: snapshotBase?.out_avg ?? null,
+            delta_day: snapshotBase?.delta_day ?? null,
+            slope_7d: snapshotBase?.slope_7d ?? null,
+            diffusion_label: snapshotBase?.diffusion_label ?? null,
+            diffusion_detail: snapshotBase?.diffusion_detail ?? null
+        },
+        history: snapshotBase?.history || []
+    };
+}
+
+async function generateAIInsight() {
+    if (!currentCityName) {
+        resetAIInsightDisplay(t('ai.empty'));
+        return;
+    }
+    const btn = document.getElementById('aiGenerateBtn');
+    const blocks = document.getElementById('aiBlocks');
+    if (btn) btn.disabled = true;
+    setText('aiStatus', t('ai.loading'));
+    if (blocks) blocks.style.display = 'none';
+
+    try {
+        const payload = buildAIAnalysisPayload();
+        const resp = await fetch(AI_ANALYSIS_API_BASE + '/api/analysis/settlement', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const data = await resp.json();
+
+        setText('aiSettlementText', data.settlement_text || '--');
+        setText('aiDiffusionText', data.diffusion_text || '--');
+        setText('aiCauseText', data.cause_text || '--');
+        setText('aiStatus', '模型: ' + (data.model || '--') + ' | 置信度: ' + Math.round((data.confidence || 0) * 100) + '%');
+        if (blocks) blocks.style.display = 'grid';
+        renderAICitations(data.citations || []);
+    } catch (err) {
+        setText('aiStatus', t('ai.err'));
+        renderAICitations([]);
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
 function openCityDetail(cityName) {
     currentCityName = cityName;
     document.getElementById('infoPlaceholder').style.display = 'none';
     document.getElementById('infoHeaderContent').style.display = 'flex';
     document.getElementById('infoBody').style.display = 'flex';
     document.getElementById('filterBar').style.display = 'flex';
+    document.getElementById('aiInsightSection').style.display = 'block';
     document.getElementById('compareBtn').style.display = 'inline-flex';
     setText('selectedCityBadge', cityName);
     setText('chartPanelTitle', cityName + ' - ' + t('city.trend7d'));
+    resetAIInsightDisplay(t('ai.empty'));
     if (typeof renderSettlementAnalysis === 'function') {
         renderSettlementAnalysis();
     }
@@ -449,8 +665,10 @@ function updateCityPanel() {
         if (typeof hideSettlementPanel === 'function') {
             hideSettlementPanel();
         }
+        document.getElementById('aiInsightSection').style.display = 'none';
         return;
     }
+    document.getElementById('aiInsightSection').style.display = currentCityName ? 'block' : 'none';
     if (!currentCityName) return;
 
     const dateStr = ALL_DATES[currentDateIndex];
@@ -636,7 +854,12 @@ document.querySelectorAll('.filter-btn').forEach(btn => {
             renderCompareChart();
         } else {
             updateCityPanel();
+            resetAIInsightDisplay(t('ai.empty'));
         }
     });
+});
+
+document.getElementById('aiGenerateBtn')?.addEventListener('click', () => {
+    generateAIInsight();
 });
 """

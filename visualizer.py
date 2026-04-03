@@ -197,6 +197,7 @@ let currentZoom = 1.2;
 let currentCenter = [105, 36];
 let settlementRadiusKm = 120;
 let settlementMapChart = null;
+const AI_ANALYSIS_API_BASE = window.AI_ANALYSIS_API_BASE || 'http://127.0.0.1:8787';
 """
 
         js_block = (
