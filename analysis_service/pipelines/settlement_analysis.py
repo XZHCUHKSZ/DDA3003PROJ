@@ -53,10 +53,16 @@ def _build_fallback(req: AnalysisRequest, profile: dict) -> tuple[str, str, str,
 def _build_user_prompt(req: AnalysisRequest, sources: list[dict], profile: dict) -> str:
     return json.dumps(
         {
-            'task': '对聚落分析做中文解读：必须通俗、短句、可执行建议、附来源ID引用',
+            'task': (
+                '对聚落分析做中文解读：必须通俗、短句、可执行建议、附来源ID引用。'
+                '成因段必须明确写出：1)当地经济体量判断；2)本地或所在省重点产业类型；'
+                '3)这些产业和污染物变化的关系。'
+            ),
             'snapshot': req.snapshot.model_dump(by_alias=True),
             'history': req.history[-14:],
             'city_profile': {
+                'city': req.snapshot.city,
+                'province': profile.get('province'),
                 'economic_level': profile.get('economic_level'),
                 'gdp_hint': profile.get('gdp_hint'),
                 'industries': profile.get('industries', []),
@@ -69,10 +75,36 @@ def _build_user_prompt(req: AnalysisRequest, sources: list[dict], profile: dict)
                 'must_cite': True,
                 'audience': '普通公众',
                 'style': '先结论后解释，避免过度专业术语',
+                'must_include_city_profile': True,
             },
         },
         ensure_ascii=False,
     )
+
+
+def _ensure_specific_cause(cause_text: str, req: AnalysisRequest, profile: dict) -> str:
+    city = req.snapshot.city
+    econ = profile.get('economic_level') or '经济体量信息待补充'
+    gdp_hint = profile.get('gdp_hint')
+    industries = profile.get('industries') or []
+    province = profile.get('province')
+
+    has_city = city in cause_text
+    has_econ = ('经济' in cause_text) or ('GDP' in cause_text) or ('体量' in cause_text)
+    has_industry = any(ind in cause_text for ind in industries) if industries else False
+
+    if has_city and has_econ and has_industry:
+        return cause_text
+
+    industry_text = '、'.join(industries[:5]) if industries else '主导产业信息待补充'
+    region_text = f'{province}{city}' if province else city
+    econ_text = f'{econ}（约{gdp_hint}）' if gdp_hint else econ
+    supplement = (
+        f"\n补充说明：{region_text}的经济画像为“{econ_text}”，"
+        f"产业结构可关注：{industry_text}。"
+        "当上述产业活动强度上升且扩散条件不佳时，污染更易累积或向外围传输。 [S3][S4]"
+    )
+    return (cause_text.rstrip() + supplement).strip()
 
 
 def run_analysis(req: AnalysisRequest) -> AnalysisResponse:
@@ -89,6 +121,7 @@ def run_analysis(req: AnalysisRequest) -> AnalysisResponse:
             confidence = float(model_out.get('confidence', 0.7))
             if not settlement_text or not diffusion_text or not cause_text:
                 raise RuntimeError('Model output missing required fields')
+            cause_text = _ensure_specific_cause(cause_text, req, profile)
         except Exception:
             used_fallback = True
             settlement_text, diffusion_text, cause_text, confidence = _build_fallback(req, profile)

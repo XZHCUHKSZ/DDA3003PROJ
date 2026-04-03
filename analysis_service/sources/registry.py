@@ -31,5 +31,17 @@ def build_default_sources(city: str) -> tuple[list[dict], dict]:
     profile = fetch_city_profile(city)
     if profile.get('source'):
         sources.append(profile['source'])
+    if profile.get('extra_source'):
+        sources.append(profile['extra_source'])
+    else:
+        sources.append(
+            {
+                'id': 'S4',
+                'title': '国家统计局',
+                'url': 'https://www.stats.gov.cn/',
+                'accessed_at': now,
+                'used_fields': ['regional_economy', 'industry_structure'],
+            }
+        )
 
     return sources, profile
