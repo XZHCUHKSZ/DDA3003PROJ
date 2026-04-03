@@ -583,6 +583,42 @@ function buildAIAnalysisPayload() {
     };
 }
 
+function renderLocalFallbackInsight(payload, reasonText) {
+    const blocks = document.getElementById('aiBlocks');
+    const snap = payload.snapshot || {};
+    const metric = snap.metric || 'AQI';
+    const inAvg = snap.in_avg != null ? Number(snap.in_avg).toFixed(1) : '--';
+    const outAvg = snap.out_avg != null ? Number(snap.out_avg).toFixed(1) : '--';
+    const delta = snap.delta_day != null ? ((snap.delta_day >= 0 ? '+' : '') + Number(snap.delta_day).toFixed(1)) : '--';
+    const slope = snap.slope_7d != null ? ((snap.slope_7d >= 0 ? '+' : '') + Number(snap.slope_7d).toFixed(2)) : '--';
+
+    setText('aiSettlementText',
+        `${snap.city || currentCityName} 在 ${snap.date || ALL_DATES[currentDateIndex]} 的 ${metric} 聚落结构：`
+        + `内圈均值 ${inAvg}，外圈均值 ${outAvg}，较昨日 ${delta}，7日斜率 ${slope}/天。 [S1]`);
+    setText('aiDiffusionText',
+        `扩散判断：${snap.diffusion_label || '待判定'}。${snap.diffusion_detail || '当前样本有限，建议结合风场数据继续验证。'} [S1][S2]`);
+    setText('aiCauseText',
+        '可能受区域传输、局地排放变化和不利气象条件共同影响。建议联动风速风向、湿度和降水数据进行复核。 [S1][S2]');
+    setText('aiStatus', reasonText || t('ai.err'));
+    if (blocks) blocks.style.display = 'grid';
+    renderAICitations([
+        {
+            id: 'S1',
+            title: '项目本地城市空气质量时序数据',
+            url: 'local://air_quality_dataset/current',
+            accessed_at: new Date().toISOString(),
+            used_fields: ['city', 'date', 'metric', 'inner_avg', 'outer_avg', 'delta_day', 'slope_7d']
+        },
+        {
+            id: 'S2',
+            title: '生态环境部-城市空气质量状况月报',
+            url: 'https://www.mee.gov.cn/hjzl/dqhj/cskqzlzkyb/index.shtml',
+            accessed_at: new Date().toISOString(),
+            used_fields: ['national_background']
+        }
+    ]);
+}
+
 async function generateAIInsight() {
     if (!currentCityName) {
         resetAIInsightDisplay(t('ai.empty'));
@@ -607,12 +643,16 @@ async function generateAIInsight() {
         setText('aiSettlementText', data.settlement_text || '--');
         setText('aiDiffusionText', data.diffusion_text || '--');
         setText('aiCauseText', data.cause_text || '--');
-        setText('aiStatus', '模型: ' + (data.model || '--') + ' | 置信度: ' + Math.round((data.confidence || 0) * 100) + '%');
+        if (data.used_fallback) {
+            setText('aiStatus', '服务已连接，当前为后端本地回退模式（未配置百炼Key）');
+        } else {
+            setText('aiStatus', '模型: ' + (data.model || '--') + ' | 置信度: ' + Math.round((data.confidence || 0) * 100) + '%');
+        }
         if (blocks) blocks.style.display = 'grid';
         renderAICitations(data.citations || []);
     } catch (err) {
-        setText('aiStatus', t('ai.err'));
-        renderAICitations([]);
+        const payload = buildAIAnalysisPayload();
+        renderLocalFallbackInsight(payload, t('ai.err') + '（未连接分析服务）');
     } finally {
         if (btn) btn.disabled = false;
     }

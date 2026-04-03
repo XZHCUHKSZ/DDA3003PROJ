@@ -23,6 +23,12 @@ If no `DASHSCOPE_API_KEY` is set, service will return rule-based fallback analys
 uvicorn analysis_service.main:app --host 127.0.0.1 --port 8787 --reload
 ```
 
+Windows quick start:
+
+```bash
+start_ai_service.bat
+```
+
 ## 4. API
 
 - `GET /health`
