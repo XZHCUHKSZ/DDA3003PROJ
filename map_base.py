@@ -335,13 +335,13 @@ def build_dom(all_dates: list[str], current_index: int) -> str:
 <div id="bootOverlay">
     <div class="boot-card">
         <div class="boot-ring"></div>
-        <h1 class="boot-title">空气质量可视化平台</h1>
+        <h1 class="boot-title">\u7a7a\u6c14\u8d28\u91cf\u53ef\u89c6\u5316\u5e73\u53f0</h1>
         <div class="boot-progress"></div>
-        <div class="boot-status" id="bootStatus">正在初始化可视化引擎...</div>
-        <div class="boot-sub" id="bootSub">正在准备地图组件与城市数据</div>
-        <div class="boot-hint" id="bootHint">首次加载约 5-10 秒，请稍候</div>
-        <button class="boot-enter" id="bootEnter" type="button">加载中...</button>
-        <button class="boot-retry" id="bootRetry" type="button">刷新重试</button>
+        <div class="boot-status" id="bootStatus">\u6b63\u5728\u521d\u59cb\u5316\u53ef\u89c6\u5316\u5f15\u64ce...</div>
+        <div class="boot-sub" id="bootSub">\u6b63\u5728\u51c6\u5907\u5730\u56fe\u7ec4\u4ef6\u4e0e\u57ce\u5e02\u6570\u636e</div>
+        <div class="boot-hint" id="bootHint">\u9996\u6b21\u52a0\u8f7d\u7ea6 5-10 \u79d2\uff0c\u8bf7\u7a0d\u5019</div>
+        <button class="boot-enter" id="bootEnter" type="button">\u52a0\u8f7d\u4e2d...</button>
+        <button class="boot-retry" id="bootRetry" type="button">\u5237\u65b0\u91cd\u8bd5</button>
     </div>
 </div>
 
@@ -400,12 +400,12 @@ function getAQIColor(v) {
 }
 
 function getAQIInfo(v) {
-    if (v <= 50) return { level: '?', advice: '???????????????????' };
-    if (v <= 100) return { level: '?', advice: '???????????????????' };
-    if (v <= 150) return { level: '????', advice: '???????????????' };
-    if (v <= 200) return { level: '????', advice: '?????????????????' };
-    if (v <= 300) return { level: '????', advice: '????????????????' };
-    return { level: '????', advice: '???????????????????' };
+    if (v <= 50) return { level: '\u4f18', advice: '\u7a7a\u6c14\u8d28\u91cf\u4ee4\u4eba\u6ee1\u610f\uff0c\u5404\u7c7b\u4eba\u7fa4\u53ef\u6b63\u5e38\u6d3b\u52a8\u3002' };
+    if (v <= 100) return { level: '\u826f', advice: '\u7a7a\u6c14\u8d28\u91cf\u53ef\u63a5\u53d7\uff0c\u654f\u611f\u4eba\u7fa4\u5efa\u8bae\u9002\u5ea6\u9632\u62a4\u3002' };
+    if (v <= 150) return { level: '\u8f7b\u5ea6\u6c61\u67d3', advice: '\u654f\u611f\u4eba\u7fa4\u5e94\u51cf\u5c11\u957f\u65f6\u95f4\u6237\u5916\u6d3b\u52a8\u3002' };
+    if (v <= 200) return { level: '\u4e2d\u5ea6\u6c61\u67d3', advice: '\u5efa\u8bae\u51cf\u5c11\u5916\u51fa\uff0c\u5fc5\u8981\u65f6\u4f69\u6234\u9632\u62a4\u88c5\u5907\u3002' };
+    if (v <= 300) return { level: '\u91cd\u5ea6\u6c61\u67d3', advice: '\u5efa\u8bae\u5c3d\u91cf\u51cf\u5c11\u6237\u5916\u6d3b\u52a8\u5e76\u505a\u597d\u9632\u62a4\u3002' };
+    return { level: '\u4e25\u91cd\u6c61\u67d3', advice: '\u5efa\u8bae\u907f\u514d\u6237\u5916\u6d3b\u52a8\uff0c\u5fc5\u987b\u5916\u51fa\u65f6\u52a0\u5f3a\u9632\u62a4\u3002' };
 }
 
 function syncMapSubtitle() {
@@ -427,7 +427,7 @@ function setBootStatus(mainText, subText) {
 function showBootSlowHint() {
     const hint = byId('bootHint');
     const retry = byId('bootRetry');
-    if (hint) hint.textContent = '网络较慢，仍在加载地图与数据...';
+    if (hint) hint.textContent = '\u7f51\u7edc\u8f83\u6162\uff0c\u4ecd\u5728\u52a0\u8f7d\u5730\u56fe\u4e0e\u6570\u636e...';
     if (retry) retry.classList.add('show');
 }
 
@@ -437,10 +437,10 @@ function markBootReady() {
     const enterBtn = byId('bootEnter');
     const hint = byId('bootHint');
     byId('bootOverlay')?.classList.add('ready');
-    setBootStatus('加载完成', '请点击下方按钮进入页面');
-    if (hint) hint.textContent = '核心数据已就绪';
+    setBootStatus('\u52a0\u8f7d\u5b8c\u6210', '\u8bf7\u70b9\u51fb\u4e0b\u65b9\u6309\u94ae\u8fdb\u5165\u9875\u9762');
+    if (hint) hint.textContent = '\u6838\u5fc3\u6570\u636e\u5df2\u5c31\u7eea';
     if (enterBtn) {
-        enterBtn.textContent = '进入地图';
+        enterBtn.textContent = '\u8fdb\u5165\u5730\u56fe';
         enterBtn.classList.add('ready');
     }
 }
