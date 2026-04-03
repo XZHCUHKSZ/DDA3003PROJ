@@ -686,6 +686,14 @@ function withAIDisclaimer(text) {
     return base ? (base + '\\n仅供参考') : '仅供参考';
 }
 
+function stripSourceMarks(text) {
+    return String(text || '')
+        .replace(/\\[S\\d+\\]/gi, '')
+        .replace(/\\s{2,}/g, ' ')
+        .replace(/\\s+([，。！？；：])/g, '$1')
+        .trim();
+}
+
 const AI_CONFIG_STORAGE_KEY = 'APP_AI_SETTINGS';
 const AI_ONLINE_READY_KEY = 'APP_AI_ONLINE_READY';
 let aiRunMode = window.APP_RUN_MODE || localStorage.getItem('APP_RUN_MODE') || 'offline';
@@ -788,6 +796,7 @@ function openAIConfigDrawer() {
     syncAIConfigFormFromState();
     document.getElementById('aiConfigBackdrop')?.classList.add('show');
     document.getElementById('aiConfigDrawer')?.classList.add('show');
+    localStorage.removeItem('APP_AI_NEED_SETUP');
 }
 
 function closeAIConfigDrawer() {
@@ -950,9 +959,9 @@ function renderAICitations(citations) {
 
 function renderAIInsight(insightData, statusText) {
     const blocks = document.getElementById('aiBlocks');
-    setText('aiSettlementText', insightData?.settlement_text || '--');
-    setText('aiDiffusionText', insightData?.diffusion_text || '--');
-    setText('aiCauseText', insightData?.cause_text || '--');
+    setText('aiSettlementText', stripSourceMarks(insightData?.settlement_text || '--'));
+    setText('aiDiffusionText', stripSourceMarks(insightData?.diffusion_text || '--'));
+    setText('aiCauseText', stripSourceMarks(insightData?.cause_text || '--'));
     setText('aiStatus', withAIDisclaimer(statusText || insightData?.status_text || t('ai.empty')));
     if (blocks) blocks.style.display = 'grid';
 }
@@ -1389,6 +1398,9 @@ loadAIRuntimeConfig();
 applyAIBaseUrl();
 syncAIConfigFormFromState();
 onAppRunModeChanged(aiRunMode);
+if (localStorage.getItem('APP_AI_NEED_SETUP') === '1') {
+    setTimeout(() => openAIConfigDrawer(), 80);
+}
 """
 
 

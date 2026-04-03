@@ -407,6 +407,7 @@ def build_dom(all_dates: list[str], current_index: int) -> str:
         <button class="map-ctrl-btn" id="ctrlZoomIn" title="{zoom_in}">+</button>
         <button class="map-ctrl-btn" id="ctrlZoomOut" title="{zoom_out}">-</button>
         <button class="map-ctrl-btn" id="ctrlReset" title="{reset_view}" style="font-size:14px;">R</button>
+        <button class="map-ctrl-btn" id="ctrlAISetup" title="AI服务设置" style="font-size:12px;">AI</button>
         <div class="map-ctrl-sep"></div>
         <button class="map-ctrl-btn" id="ctrlGoDetail" title="{goto_detail}" style="font-size:13px;">
             v<br><span style="font-size:9px;line-height:1;display:block;">{detail_label}</span>
@@ -469,10 +470,8 @@ function syncMapSubtitle() {
 
 let bootOverlayDone = false;
 let bootReadyToEnter = false;
-let appRunMode = (localStorage.getItem('APP_RUN_MODE') || '').trim();
-if (appRunMode === 'online' && localStorage.getItem('APP_AI_ONLINE_READY') !== '1') {
-    appRunMode = '';
-}
+const savedRunMode = (localStorage.getItem('APP_RUN_MODE') || '').trim();
+let appRunMode = savedRunMode === 'offline' ? 'offline' : '';
 
 function syncBootModeUI() {
     const offlineBtn = byId('bootModeOffline');
@@ -491,7 +490,7 @@ function syncBootModeUI() {
 }
 
 function canEnterBoot() {
-    return bootReadyToEnter && (appRunMode === 'offline' || appRunMode === 'online');
+    return appRunMode === 'offline' || appRunMode === 'online';
 }
 
 function notifyRunModeChanged() {
@@ -503,23 +502,16 @@ function notifyRunModeChanged() {
 
 function setAppRunMode(mode) {
     if (mode !== 'offline' && mode !== 'online') return;
-    if (mode === 'online' && localStorage.getItem('APP_AI_ONLINE_READY') !== '1') {
-        const tip = byId('bootModeTip');
-        if (tip) {
-            tip.textContent = '在线模式需要先完成AI服务设置并测试连接';
-        }
-        if (typeof window.openAIConfigFromBoot === 'function') {
-            window.openAIConfigFromBoot();
-        }
-        return;
-    }
     appRunMode = mode;
     localStorage.setItem('APP_RUN_MODE', mode);
-    syncBootModeUI();
-    if (bootReadyToEnter) {
-        byId('bootEnter')?.classList.add('ready');
-        byId('bootEnter') && (byId('bootEnter').textContent = t('loader.enter.ready'));
+    if (mode === 'online' && localStorage.getItem('APP_AI_ONLINE_READY') !== '1') {
+        localStorage.setItem('APP_AI_NEED_SETUP', '1');
+    } else {
+        localStorage.removeItem('APP_AI_NEED_SETUP');
     }
+    syncBootModeUI();
+    byId('bootEnter')?.classList.add('ready');
+    byId('bootEnter') && (byId('bootEnter').textContent = t('loader.enter.ready'));
     notifyRunModeChanged();
 }
 
@@ -651,14 +643,29 @@ byId('bootEnter')?.addEventListener('click', () => {
         return;
     }
     hideBootOverlay();
+    if (appRunMode === 'online' && localStorage.getItem('APP_AI_ONLINE_READY') !== '1') {
+        setTimeout(() => {
+            if (typeof window.openAIConfigFromBoot === 'function') {
+                window.openAIConfigFromBoot();
+            }
+        }, 120);
+    }
 });
 document.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && canEnterBoot() && !bootOverlayDone) hideBootOverlay();
+    if (e.key === 'Enter' && canEnterBoot() && !bootOverlayDone) {
+        hideBootOverlay();
+    }
 });
 
 const bootSlowTimer = setTimeout(() => {
     if (!bootOverlayDone) showBootSlowHint();
 }, 10000);
+const bootForceReadyTimer = setTimeout(() => {
+    if (!bootReadyToEnter) {
+        setBootStatus(t('loader.status.ready'), '初始化较慢，已允许先进入页面');
+        markBootReady();
+    }
+}, 15000);
 
 setTimeout(function() {
     setBootStatus(t('loader.status.connect_map'), t('loader.sub.connect_map'));
@@ -675,6 +682,9 @@ setTimeout(function() {
     if (!mapChartInstance) {
         setBootStatus(t('loader.status.failed'), t('loader.sub.failed'));
         showBootSlowHint();
+        clearTimeout(bootSlowTimer);
+        clearTimeout(bootForceReadyTimer);
+        markBootReady();
         return;
     }
 
@@ -726,6 +736,11 @@ setTimeout(function() {
     byId('ctrlZoomIn')?.addEventListener('click', () => applyGeoView(currentZoom * ZOOM_STEP));
     byId('ctrlZoomOut')?.addEventListener('click', () => applyGeoView(currentZoom / ZOOM_STEP));
     byId('ctrlReset')?.addEventListener('click', () => applyGeoView(1.2, [105, 36]));
+    byId('ctrlAISetup')?.addEventListener('click', () => {
+        if (typeof window.openAIConfigFromBoot === 'function') {
+            window.openAIConfigFromBoot();
+        }
+    });
     byId('ctrlGoDetail')?.addEventListener('click', () => {
         byId('infoSection')?.scrollIntoView({ behavior: 'smooth' });
     });
@@ -748,6 +763,7 @@ setTimeout(function() {
     const onBootRenderFinished = function() {
         if (bootOverlayDone) return;
         clearTimeout(bootSlowTimer);
+        clearTimeout(bootForceReadyTimer);
         markBootReady();
         if (finishHooked) {
             mapChartInstance.off('finished', onBootRenderFinished);
