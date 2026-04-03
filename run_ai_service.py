@@ -65,7 +65,11 @@ def _build_control_cmd(host: str, port: int) -> list[str]:
 
 def start_ai_service(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> bool:
     project_root = Path(__file__).resolve().parent
-    cmd = _build_uvicorn_cmd(host, port)
+    bat_path = project_root / "start_ai_service.bat"
+    if os.name == "nt" and bat_path.exists():
+        cmd = ["cmd.exe", "/c", str(bat_path)]
+    else:
+        cmd = _build_uvicorn_cmd(host, port)
     kwargs: dict = {
         "cwd": str(project_root),
         "stdout": subprocess.DEVNULL,

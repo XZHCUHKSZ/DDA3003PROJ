@@ -808,9 +808,9 @@ async function startLocalAIService(baseUrl) {
         body: JSON.stringify({
             host: info.host,
             port: info.port,
-            wait_seconds: 10
+            wait_seconds: 1.5
         })
-    }, 12000);
+    }, 30000);
     const data = await resp.json().catch(() => ({}));
     const msg = String(data.message || '');
     if (!resp.ok || !data.ok) {
@@ -904,7 +904,7 @@ async function testAIConnection() {
                 setAIConfigStatus('AI服务未启动，正在自动启动...');
                 await startLocalAIService(AI_ANALYSIS_API_BASE || '');
                 setAIConfigStatus('AI服务已启动，正在等待就绪...');
-                await waitAIHealthReady(AI_ANALYSIS_API_BASE || '', aiRuntimeConfig.apiKey, 8, 600);
+                await waitAIHealthReady(AI_ANALYSIS_API_BASE || '', aiRuntimeConfig.apiKey, 25, 1200);
                 markAIOnlineReady(true);
                 setAIConfigStatus('AI服务已启动并连接成功');
             } else {
@@ -913,7 +913,12 @@ async function testAIConnection() {
             }
         } catch (startErr) {
             markAIOnlineReady(false);
-            setAIConfigStatus('启动/连接失败：' + (startErr?.message || err?.message || 'unknown error'));
+            const raw = String(startErr?.message || err?.message || 'unknown error');
+            if (raw.includes('Failed to fetch')) {
+                setAIConfigStatus('启动失败：本地AI控制服务不可达。请重新运行主程序后重试。');
+            } else {
+                setAIConfigStatus('启动/连接失败：' + raw);
+            }
         }
     }
     setAIModeStateText();
