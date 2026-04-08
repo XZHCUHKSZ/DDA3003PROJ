@@ -904,6 +904,7 @@ const POLLUTANT_THRESHOLDS = {
 let detailViewMode = 'city';
 let monthHeatmapChart = null;
 let selectedHeatmapMonth = '';
+const HEATMAP_SERVICE_BASE = 'http://127.0.0.1:8791';
 
 function pollutantLevel(metric, value) {
     if (value == null || Number.isNaN(Number(value))) return -1;
@@ -972,25 +973,43 @@ function ensureHeatmapMonthPicker() {
     sel.value = selectedHeatmapMonth;
 }
 
-function getHeatmapValue(cityName, dateStr, metric) {
-    if (metric === 'AQI') return CITY_DATA_BY_DATE[dateStr]?.[cityName] ?? null;
-    return POLLUTANTS_DATA[dateStr]?.[cityName]?.[metric] ?? null;
+function metricToHourlyType(metric) {
+    return {
+        AQI: 'AQI',
+        'PM2.5_24h': 'PM2.5',
+        'PM10_24h': 'PM10',
+        'SO2_24h': 'SO2',
+        'NO2_24h': 'NO2',
+        'O3_8h': 'O3',
+        'O3_8h_24h': 'O3'
+    }[metric] || metric;
 }
 
-function buildMonthHeatmapData(cityName, monthYm, metric) {
-    const out = [];
-    (ALL_DATES || []).forEach(d => {
-        if (fmtYm(d) !== monthYm) return;
-        const value = getHeatmapValue(cityName, d, metric);
-        if (value == null || Number.isNaN(Number(value))) return;
-        out.push([fmtDate(d), Number(value)]);
-    });
-    return out;
+function getDaysInMonth(monthYm) {
+    const [y, m] = monthYm.split('-').map(x => Number(x));
+    if (!y || !m) return [];
+    const days = new Date(y, m, 0).getDate();
+    return Array.from({ length: days }, (_, i) => i + 1);
 }
 
-function renderMonthHeatmap() {
+function buildHourAxis() {
+    return Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
+}
+
+async function fetchMonthlyHourlyHeatmap(cityName, monthYm, metric) {
+    const hourlyMetric = metricToHourlyType(metric);
+    const url = `${HEATMAP_SERVICE_BASE}/api/heatmap/monthly?city=${encodeURIComponent(cityName)}&metric=${encodeURIComponent(hourlyMetric)}&month=${encodeURIComponent(monthYm)}`;
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const data = await resp.json();
+    if (!data.ok) throw new Error(data.message || 'heatmap service error');
+    return data;
+}
+
+async function renderMonthHeatmap() {
     const chartDom = document.getElementById('monthHeatmapChart');
     const titleEl = document.getElementById('monthHeatmapTitle');
+    const hintEl = document.getElementById('monthHeatmapHint');
     if (!chartDom) return;
     if (!monthHeatmapChart) {
         monthHeatmapChart = echarts.init(chartDom, null, { renderer: 'canvas' });
@@ -1003,10 +1022,51 @@ function renderMonthHeatmap() {
     ensureHeatmapMonthPicker();
     const monthYm = selectedHeatmapMonth;
     const metric = selectedMetric || 'AQI';
+    const hourlyMetric = metricToHourlyType(metric);
     const pieces = getMetricLegendPieces(metric);
-    const data = buildMonthHeatmapData(currentCityName, monthYm, metric);
     const metricName = metric === 'AQI' ? 'AQI' : pollutantDisplayName(metric) + ' (ug/m3)';
-    if (titleEl) titleEl.textContent = `${currentCityName} · ${monthYm} · ${metricName} 月历热力图`;
+    if (titleEl) titleEl.textContent = `${currentCityName} · ${monthYm} · ${metricName} 小时热力图`;
+    if (hintEl) hintEl.textContent = '正在加载小时数据...';
+    let serviceData;
+    try {
+        serviceData = await fetchMonthlyHourlyHeatmap(currentCityName, monthYm, metric);
+    } catch (err) {
+        monthHeatmapChart.clear();
+        if (hintEl) hintEl.textContent = `热力图服务不可用：${err?.message || err}。请先运行主程序。`;
+        return;
+    }
+
+    const days = getDaysInMonth(monthYm);
+    const hours = buildHourAxis();
+    const heatRows = [];
+    const byDayHour = {};
+    (serviceData.data || []).forEach(item => {
+        const ds = String(item[0] || '');
+        const day = Number(ds.slice(-2));
+        const hour = Number(item[1]);
+        const val = Number(item[2]);
+        if (!Number.isFinite(day) || !Number.isFinite(hour) || !Number.isFinite(val)) return;
+        byDayHour[`${day}-${hour}`] = val;
+    });
+    days.forEach((d, di) => {
+        for (let h = 0; h < 24; h++) {
+            const key = `${d}-${h}`;
+            const v = byDayHour[key];
+            if (v == null || Number.isNaN(v)) continue;
+            heatRows.push([h, di, v]);
+        }
+    });
+
+    const coverage = serviceData.coverage || {};
+    if (hintEl) {
+        const ratio = Number.isFinite(coverage.ratio) ? (coverage.ratio * 100).toFixed(1) : '--';
+        if (metric !== hourlyMetric) {
+            hintEl.textContent = `数据源：${hourlyMetric} 小时值（当前筛选 ${metricName}）；覆盖率 ${ratio}%（缺失自动跳过）`;
+        } else {
+            hintEl.textContent = `覆盖率 ${ratio}%（缺失自动跳过）`;
+        }
+    }
+
     monthHeatmapChart.setOption({
         animation: false,
         tooltip: {
@@ -1015,7 +1075,14 @@ function renderMonthHeatmap() {
             borderColor: '#c5d8f5',
             borderWidth: 1,
             textStyle: { color: '#1a2a4a' },
-            formatter: p => `${p.data?.[0] || '--'}<br/>${metricName}: <b>${p.data?.[1] ?? '--'}</b>`
+            formatter: p => {
+                const xh = p.data?.[0];
+                const yd = p.data?.[1];
+                const vv = p.data?.[2];
+                const hourLabel = String(xh).padStart(2, '0') + ':00';
+                const dayLabel = String(days[yd] || '--').padStart(2, '0');
+                return `${monthYm}-${dayLabel} ${hourLabel}<br/>${metricName}: <b>${vv ?? '--'}</b>`;
+            }
         },
         visualMap: {
             type: 'piecewise',
@@ -1027,33 +1094,31 @@ function renderMonthHeatmap() {
             textStyle: { color: '#6b8cba', fontSize: 11 },
             pieces: pieces.map(x => ({ min: x.min, max: x.max, label: x.label, color: x.color }))
         },
-        calendar: {
-            top: 80,
-            left: 26,
-            right: 26,
-            cellSize: ['auto', 28],
-            range: monthYm,
-            splitLine: {
-                show: true,
-                lineStyle: { color: '#e8eef8', width: 1 }
-            },
-            itemStyle: {
-                color: '#f8fbff',
-                borderColor: '#e8eef8',
-                borderWidth: 1
-            },
-            dayLabel: {
-                nameMap: ['日', '一', '二', '三', '四', '五', '六'],
-                color: '#7a9cc0'
-            },
-            monthLabel: { show: false },
-            yearLabel: { show: false }
+        grid: { left: 60, right: 20, top: 86, bottom: 26, containLabel: true },
+        xAxis: {
+            type: 'category',
+            data: hours,
+            splitArea: { show: true },
+            axisLabel: { color: '#6b8cba', fontSize: 11 },
+            axisLine: { lineStyle: { color: '#dde8f5' } }
         },
-        series: {
+        yAxis: {
+            type: 'category',
+            data: days.map(d => String(d).padStart(2, '0')),
+            splitArea: { show: true },
+            axisLabel: { color: '#6b8cba', fontSize: 11 },
+            axisLine: { lineStyle: { color: '#dde8f5' } }
+        },
+        series: [{
             type: 'heatmap',
-            coordinateSystem: 'calendar',
-            data: data
-        }
+            data: heatRows,
+            emphasis: {
+                itemStyle: {
+                    shadowBlur: 8,
+                    shadowColor: 'rgba(21,101,192,0.25)'
+                }
+            }
+        }]
     }, true);
     setTimeout(() => monthHeatmapChart && monthHeatmapChart.resize(), 30);
 }

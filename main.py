@@ -13,6 +13,7 @@ import argparse
 import os
 
 from run_ai_service import ensure_ai_control_service_running, ensure_ai_service_running
+from heatmap_service import ensure_heatmap_service_running
 from visualizer import InteractiveAirQualityMap
 
 
@@ -55,6 +56,10 @@ def main() -> None:
         warm_prefix = "OK" if warm_ok else "WARN"
         print(f"[AI-WARMUP][{warm_prefix}] {warm_msg}")
         print("[AI] Full auto-start skipped by default. Use --ai-autostart for strict startup checks.")
+
+    heatmap_ok, heatmap_msg = ensure_heatmap_service_running(args.data)
+    heat_prefix = "OK" if heatmap_ok else "WARN"
+    print(f"[HEATMAP][{heat_prefix}] {heatmap_msg}")
 
     if not os.path.exists(args.data):
         print(f"\n[ERROR] Data file not found: {args.data}")
