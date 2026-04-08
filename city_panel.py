@@ -561,6 +561,28 @@ def build_css() -> str:
     grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
     gap: 12px;
 }
+#aiScopeSwitch {
+    display: inline-flex;
+    gap: 6px;
+    background: #f2f7ff;
+    border: 1px solid #d2e3f8;
+    border-radius: 999px;
+    padding: 3px;
+}
+.ai-scope-btn {
+    border: none;
+    background: transparent;
+    color: #3b6593;
+    border-radius: 999px;
+    padding: 6px 10px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+}
+.ai-scope-btn.active {
+    background: #1565c0;
+    color: #fff;
+}
 .ai-block {
     background: linear-gradient(180deg, #fbfdff 0%, #f4f8ff 100%);
     border: 1px solid #dce9f8;
@@ -790,6 +812,10 @@ def build_dom(all_dates: list[str], current_index: int) -> str:
                 <div id="aiInsightSub">{ui_texts.get("ai.subtitle")}</div>
             </div>
             <div style="display:flex;gap:8px;align-items:center;">
+                <div id="aiScopeSwitch">
+                    <button id="aiScopeSettlementBtn" type="button" class="ai-scope-btn active" data-scope="settlement">聚落分析</button>
+                    <button id="aiScopeCityBtn" type="button" class="ai-scope-btn" data-scope="city">城市分析</button>
+                </div>
                 <button id="aiConfigBtn" type="button">AI服务设置</button>
                 <button id="aiGenerateBtn" type="button">{ui_texts.get("ai.btn")}</button>
             </div>
@@ -798,15 +824,15 @@ def build_dom(all_dates: list[str], current_index: int) -> str:
         <div id="aiProgressWrap"><div id="aiProgressBar"></div></div>
         <div id="aiBlocks" style="display:none;">
             <div class="ai-block">
-                <h4>{ui_texts.get("ai.section.settlement")}</h4>
+                <h4 id="aiBlockTitleA">{ui_texts.get("ai.section.settlement")}</h4>
                 <p id="aiSettlementText">--</p>
             </div>
             <div class="ai-block">
-                <h4>{ui_texts.get("ai.section.diffusion")}</h4>
+                <h4 id="aiBlockTitleB">{ui_texts.get("ai.section.diffusion")}</h4>
                 <p id="aiDiffusionText">--</p>
             </div>
             <div class="ai-block">
-                <h4>{ui_texts.get("ai.section.causes")}</h4>
+                <h4 id="aiBlockTitleC">{ui_texts.get("ai.section.causes")}</h4>
                 <div id="aiCauseText">--</div>
             </div>
         </div>
@@ -893,6 +919,7 @@ function pollutantDisplayName(metric) {
 }
 
 const POLLUTANT_COLOR_LEVELS = ['#00e400', '#ffff00', '#ff7e00', '#ff0000', '#99004c', '#7e0023'];
+const HEATMAP_BLUE_LEVELS = ['#f7fbff', '#deebf7', '#c6dbef', '#9ecae1', '#6baed6', '#3182bd'];
 const POLLUTANT_THRESHOLDS = {
     'PM2.5_24h': [35, 75, 115, 150, 250],
     'PM10_24h': [50, 150, 250, 350, 420],
@@ -905,6 +932,8 @@ let detailViewMode = 'city';
 let monthHeatmapChart = null;
 let selectedHeatmapMonth = '';
 const HEATMAP_SERVICE_BASE = 'http://127.0.0.1:8791';
+const HEATMAP_MONTH_CACHE = new Map();
+let aiAnalysisScope = 'settlement';
 
 function pollutantLevel(metric, value) {
     if (value == null || Number.isNaN(Number(value))) return -1;
@@ -924,7 +953,7 @@ function pollutantLevelText(level) {
 }
 
 function getMetricLegendPieces(metric) {
-    const colors = POLLUTANT_COLOR_LEVELS.slice();
+    const colors = HEATMAP_BLUE_LEVELS.slice();
     if (metric === 'AQI') {
         return [
             { label: '优', min: 0, max: 50, range: '0-50', color: colors[0] },
@@ -998,11 +1027,14 @@ function buildHourAxis() {
 
 async function fetchMonthlyHourlyHeatmap(cityName, monthYm, metric) {
     const hourlyMetric = metricToHourlyType(metric);
+    const cacheKey = `${cityName}::${monthYm}::${hourlyMetric}`;
+    if (HEATMAP_MONTH_CACHE.has(cacheKey)) return HEATMAP_MONTH_CACHE.get(cacheKey);
     const url = `${HEATMAP_SERVICE_BASE}/api/heatmap/monthly?city=${encodeURIComponent(cityName)}&metric=${encodeURIComponent(hourlyMetric)}&month=${encodeURIComponent(monthYm)}`;
     const resp = await fetch(url);
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     const data = await resp.json();
     if (!data.ok) throw new Error(data.message || 'heatmap service error');
+    HEATMAP_MONTH_CACHE.set(cacheKey, data);
     return data;
 }
 
@@ -1058,9 +1090,13 @@ async function renderMonthHeatmap() {
     });
 
     const coverage = serviceData.coverage || {};
+    const ratioNum = Number.isFinite(coverage.ratio) ? Number(coverage.ratio) : 0;
+    const coverageLow = ratioNum < 0.8;
     if (hintEl) {
         const ratio = Number.isFinite(coverage.ratio) ? (coverage.ratio * 100).toFixed(1) : '--';
-        if (metric !== hourlyMetric) {
+        if (coverageLow) {
+            hintEl.textContent = `该月份缺失过多（覆盖率 ${ratio}% < 80%），仅显示已有小时，不建议做趋势结论。`;
+        } else if (metric !== hourlyMetric) {
             hintEl.textContent = `数据源：${hourlyMetric} 小时值（当前筛选 ${metricName}）；覆盖率 ${ratio}%（缺失自动跳过）`;
         } else {
             hintEl.textContent = `覆盖率 ${ratio}%（缺失自动跳过）`;
@@ -1092,7 +1128,7 @@ async function renderMonthHeatmap() {
             itemWidth: 18,
             itemHeight: 10,
             textStyle: { color: '#6b8cba', fontSize: 11 },
-            pieces: pieces.map(x => ({ min: x.min, max: x.max, label: x.label, color: x.color }))
+            pieces: pieces.map(x => ({ min: x.min, max: x.max, label: `${x.label} (${x.range})`, color: x.color }))
         },
         grid: { left: 60, right: 20, top: 86, bottom: 26, containLabel: true },
         xAxis: {
@@ -1118,7 +1154,32 @@ async function renderMonthHeatmap() {
                     shadowColor: 'rgba(21,101,192,0.25)'
                 }
             }
-        }]
+        }],
+        graphic: coverageLow ? [{
+            type: 'group',
+            left: 'center',
+            top: 'middle',
+            z: 50,
+            children: [
+                {
+                    type: 'rect',
+                    shape: { x: -220, y: -26, width: 440, height: 52, r: 10 },
+                    style: { fill: 'rgba(255,255,255,0.86)', stroke: '#b9d0ed', lineWidth: 1 }
+                },
+                {
+                    type: 'text',
+                    style: {
+                        text: '该月份缺失过多（>20%）',
+                        fill: '#2f5f93',
+                        font: '600 14px Microsoft YaHei',
+                        textAlign: 'center',
+                        textVerticalAlign: 'middle'
+                    },
+                    x: 0,
+                    y: 0
+                }
+            ]
+        }] : []
     }, true);
     setTimeout(() => monthHeatmapChart && monthHeatmapChart.resize(), 30);
 }
@@ -1655,6 +1716,32 @@ function resetAIInsightDisplay(statusText) {
 
 const AI_INSIGHT_CACHE = new Map();
 
+function updateAIInsightHeaderByScope() {
+    const title = document.getElementById('aiInsightTitle');
+    const sub = document.getElementById('aiInsightSub');
+    const blockA = document.getElementById('aiBlockTitleA');
+    const blockB = document.getElementById('aiBlockTitleB');
+    const blockC = document.getElementById('aiBlockTitleC');
+    if (title) title.textContent = 'AI 深度分析';
+    if (sub) {
+        sub.textContent = aiAnalysisScope === 'city'
+            ? '城市趋势、风险与成因解读（仅供参考）'
+            : '聚落结构、污染扩散与成因解读（仅供参考）';
+    }
+    if (blockA) blockA.textContent = aiAnalysisScope === 'city' ? '城市趋势解读' : '聚落解读';
+    if (blockB) blockB.textContent = aiAnalysisScope === 'city' ? '短期风险分析' : '扩散分析';
+    if (blockC) blockC.textContent = '成因推断';
+    document.querySelectorAll('.ai-scope-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.scope === aiAnalysisScope);
+    });
+}
+
+function setAIInsightScope(scope) {
+    aiAnalysisScope = scope === 'city' ? 'city' : 'settlement';
+    updateAIInsightHeaderByScope();
+    refreshAIInsightPanel();
+}
+
 function getCurrentAIContextKey(payload) {
     const snap = payload?.snapshot || {};
     const city = snap.city || currentCityName || '';
@@ -1663,7 +1750,7 @@ function getCurrentAIContextKey(payload) {
     const radius = snap.radiusKm != null
         ? Number(snap.radiusKm)
         : (typeof settlementRadiusKm === 'number' ? settlementRadiusKm : 120);
-    return [city, date, metric, radius].join('::');
+    return [aiAnalysisScope, city, date, metric, radius].join('::');
 }
 
 function storeAIInsightInCache(cacheKey, insightData) {
@@ -1742,6 +1829,72 @@ function refreshAIInsightPanel() {
 
 window.refreshAIInsightPanel = refreshAIInsightPanel;
 
+function getMetricValueByDateAndCity(dateStr, cityName, metric) {
+    if (!dateStr || !cityName) return null;
+    if (metric === 'AQI') return CITY_DATA_BY_DATE[dateStr]?.[cityName] ?? null;
+    return POLLUTANTS_DATA[dateStr]?.[cityName]?.[metric] ?? null;
+}
+
+function computeLinearSlope(values) {
+    const pts = [];
+    for (let i = 0; i < values.length; i++) {
+        const v = values[i];
+        if (v != null && Number.isFinite(Number(v))) pts.push([i, Number(v)]);
+    }
+    if (pts.length < 2) return null;
+    const n = pts.length;
+    let sx = 0, sy = 0, sxy = 0, sxx = 0;
+    pts.forEach(([x, y]) => { sx += x; sy += y; sxy += x * y; sxx += x * x; });
+    const den = n * sxx - sx * sx;
+    if (!den) return null;
+    return (n * sxy - sx * sy) / den;
+}
+
+function buildCityContextData(dateStr) {
+    const endIdx = currentDateIndex;
+    const startIdx = Math.max(0, endIdx - 6);
+    const seq = getCityTrendValues(currentCityName, selectedMetric, startIdx, endIdx);
+    const current = getMetricValueByDateAndCity(dateStr, currentCityName, selectedMetric);
+    const prevDate = ALL_DATES[Math.max(0, currentDateIndex - 1)];
+    const prev = prevDate ? getMetricValueByDateAndCity(prevDate, currentCityName, selectedMetric) : null;
+    const deltaDay = (current != null && prev != null && Number.isFinite(Number(current)) && Number.isFinite(Number(prev)))
+        ? (Number(current) - Number(prev))
+        : null;
+    const slope = computeLinearSlope(seq);
+    const valid = seq.filter(v => v != null && Number.isFinite(Number(v))).map(Number);
+    const dayMap = selectedMetric === 'AQI'
+        ? (CITY_DATA_BY_DATE[dateStr] || {})
+        : (POLLUTANTS_DATA[dateStr] || {});
+    const universe = [];
+    Object.keys(dayMap).forEach(city => {
+        const v = selectedMetric === 'AQI' ? dayMap[city] : dayMap[city]?.[selectedMetric];
+        if (v != null && Number.isFinite(Number(v))) universe.push(Number(v));
+    });
+    universe.sort((a, b) => a - b);
+    let percentile = null;
+    if (current != null && universe.length) {
+        let le = 0;
+        for (let i = 0; i < universe.length; i++) if (universe[i] <= Number(current)) le += 1;
+        percentile = (le / universe.length) * 100;
+    }
+    const riskLevel = percentile == null ? '未知'
+        : percentile >= 85 ? '较高'
+        : percentile >= 60 ? '中等偏高'
+        : percentile >= 35 ? '中等'
+        : '较低';
+    return {
+        current: current != null ? Number(current) : null,
+        previous: prev != null ? Number(prev) : null,
+        delta_day: deltaDay,
+        slope_7d: slope,
+        max_7d: valid.length ? Math.max(...valid) : null,
+        min_7d: valid.length ? Math.min(...valid) : null,
+        avg_7d: valid.length ? valid.reduce((a, b) => a + b, 0) / valid.length : null,
+        national_percentile: percentile,
+        risk_level: riskLevel
+    };
+}
+
 function buildAIAnalysisPayload() {
     const snapshotBase = (typeof getCurrentSettlementSnapshot === 'function')
         ? getCurrentSettlementSnapshot()
@@ -1762,7 +1915,8 @@ function buildAIAnalysisPayload() {
             diffusion_label: snapshotBase?.diffusion_label ?? null,
             diffusion_detail: snapshotBase?.diffusion_detail ?? null
         },
-        history: snapshotBase?.history || []
+        history: snapshotBase?.history || [],
+        city_context: buildCityContextData(dateStr)
     };
 }
 
@@ -1774,14 +1928,18 @@ function renderLocalFallbackInsight(payload, reasonText) {
     const delta = snap.delta_day != null ? ((snap.delta_day >= 0 ? '+' : '') + Number(snap.delta_day).toFixed(1)) : '--';
     const slope = snap.slope_7d != null ? ((snap.slope_7d >= 0 ? '+' : '') + Number(snap.slope_7d).toFixed(2)) : '--';
 
+    const cityCtx = payload.city_context || {};
+    const isCity = aiAnalysisScope === 'city';
     const insightData = {
-        settlement_text:
-            `${snap.city || currentCityName} 在 ${snap.date || ALL_DATES[currentDateIndex]} 的 ${metric} 聚落结构：`
-            + `内圈均值 ${inAvg}，外圈均值 ${outAvg}，较昨日 ${delta}，7日斜率 ${slope}/天。[S1]`,
-        diffusion_text:
-            `扩散判断：${snap.diffusion_label || '待判定'}。${snap.diffusion_detail || '当前样本有限，建议结合风场数据继续验证。'} [S1][S2]`,
-        cause_text:
-            '可能受区域传输、局地排放变化和不利气象条件共同影响。建议联动风速风向、湿度和降水数据进行复核。[S1][S2]',
+        settlement_text: isCity
+            ? `${snap.city || currentCityName} 在 ${snap.date || ALL_DATES[currentDateIndex]} 的 ${metric} 当前值 ${cityCtx.current ?? '--'}，较昨日 ${delta}，7日斜率 ${slope}/天。`
+            : `${snap.city || currentCityName} 在 ${snap.date || ALL_DATES[currentDateIndex]} 的 ${metric} 聚落结构：内圈均值 ${inAvg}，外圈均值 ${outAvg}，较昨日 ${delta}，7日斜率 ${slope}/天。`,
+        diffusion_text: isCity
+            ? `短期风险：全国相对分位约 ${cityCtx.national_percentile != null ? Number(cityCtx.national_percentile).toFixed(1) + '%' : '--'}，风险等级 ${cityCtx.risk_level || '--'}。`
+            : `扩散判断：${snap.diffusion_label || '待判定'}。${snap.diffusion_detail || '当前样本有限，建议结合风场数据继续验证。'}`,
+        cause_text: isCity
+            ? ['1) 先看气象条件是否不利扩散；', '2) 再看本地排放活动是否上行；', '3) 关注地理地形对扩散效率的限制；', '4) 最后结合经济与产业强度评估长期影响。'].join('\\n')
+            : ['1) 可能受区域传输与局地排放变化共同影响；', '2) 建议联动风速风向、湿度和降水复核；', '3) 关注跨城传输路径；', '4) 结合经济与产业强度评估长期影响。'].join('\\n'),
         citations: [
             {
                 id: 'S1',
@@ -1840,7 +1998,8 @@ async function generateAIInsight() {
         const headers = { 'Content-Type': 'application/json' };
         if (aiRuntimeConfig.apiKey) headers['X-API-Key'] = aiRuntimeConfig.apiKey;
         const base = (AI_ANALYSIS_API_BASE || 'http://127.0.0.1:8787').replace(/\\/$/, '');
-        const resp = await fetchWithTimeout(base + '/api/analysis/settlement', {
+        const endpoint = aiAnalysisScope === 'city' ? '/api/analysis/city' : '/api/analysis/settlement';
+        const resp = await fetchWithTimeout(base + endpoint, {
             method: 'POST',
             headers: headers,
             body: JSON.stringify(payload)
@@ -2116,6 +2275,9 @@ document.getElementById('monthPicker')?.addEventListener('change', function() {
 document.getElementById('aiGenerateBtn')?.addEventListener('click', () => {
     generateAIInsight();
 });
+document.querySelectorAll('.ai-scope-btn').forEach(btn => {
+    btn.addEventListener('click', () => setAIInsightScope(btn.dataset.scope));
+});
 
 document.getElementById('aiConfigBtn')?.addEventListener('click', () => {
     openAIConfigDrawer();
@@ -2144,6 +2306,7 @@ document.getElementById('aiSaveConfigBtn')?.addEventListener('click', async () =
 loadAIRuntimeConfig();
 applyAIBaseUrl();
 syncAIConfigFormFromState();
+updateAIInsightHeaderByScope();
 onAppRunModeChanged(aiRunMode);
 if (localStorage.getItem('APP_AI_NEED_SETUP') === '1') {
     setTimeout(() => openAIConfigDrawer(), 80);

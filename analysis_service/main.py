@@ -10,6 +10,7 @@ from analysis_service.models import (
     ProviderCheckResponse,
 )
 from analysis_service.providers.bailian_client import BailianClient
+from analysis_service.pipelines.city_analysis import run_city_analysis
 from analysis_service.pipelines.settlement_analysis import run_analysis
 
 app = FastAPI(title='Air Quality AI Analysis Service', version='0.1.0')
@@ -34,6 +35,14 @@ def analyze_settlement(
     x_api_key: str | None = Header(default=None, alias='X-API-Key'),
 ) -> AnalysisResponse:
     return run_analysis(req, api_key=(x_api_key or '').strip())
+
+
+@app.post('/api/analysis/city', response_model=AnalysisResponse)
+def analyze_city(
+    req: AnalysisRequest,
+    x_api_key: str | None = Header(default=None, alias='X-API-Key'),
+) -> AnalysisResponse:
+    return run_city_analysis(req, api_key=(x_api_key or '').strip())
 
 
 @app.post('/api/provider/check', response_model=ProviderCheckResponse)

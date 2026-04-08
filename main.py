@@ -10,11 +10,79 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import importlib
 import os
+import re
+from pathlib import Path
 
 from run_ai_service import ensure_ai_control_service_running, ensure_ai_service_running
-from heatmap_service import ensure_heatmap_service_running
 from visualizer import InteractiveAirQualityMap
+
+
+def _try_start_heatmap_service(data_path: str) -> tuple[bool, str]:
+    try:
+        mod = importlib.import_module("heatmap_service")
+        ensure_heatmap_service_running = getattr(mod, "ensure_heatmap_service_running", None)
+        if ensure_heatmap_service_running is None:
+            return False, "heatmap_service.ensure_heatmap_service_running not found"
+    except Exception as exc:
+        return False, f"heatmap module unavailable: {exc}"
+    try:
+        return ensure_heatmap_service_running(data_path)
+    except Exception as exc:
+        return False, f"heatmap service start failed: {exc}"
+
+
+def _dir_has_csv(path: Path) -> bool:
+    if not path.exists() or not path.is_dir():
+        return False
+    # Heatmap service needs day-level files like *_YYYYMMDD.csv.
+    date_pat = re.compile(r"\d{8}")
+    try:
+        for fp in path.rglob("*.csv"):
+            if date_pat.search(fp.stem):
+                return True
+        return False
+    except StopIteration:
+        return False
+    except Exception:
+        return False
+
+
+def _resolve_heatmap_data_root(data_path: str) -> tuple[str | None, str]:
+    candidates: list[tuple[Path, str]] = []
+    env_root = os.getenv("HEATMAP_DATA_ROOT", "").strip()
+    if env_root:
+        candidates.append((Path(env_root), "env:HEATMAP_DATA_ROOT"))
+    # User-provided fixed daily-data location (local machine default).
+    fixed_root = Path(r"D:\xwechat_files\wxid_t5ne9kglije022_12bf\msg\file\2026-01\data")
+    candidates.append((fixed_root / "data", "fixed root data/"))
+    candidates.append((fixed_root, "fixed root"))
+
+    p = Path(data_path)
+    if p.exists():
+        if p.is_dir():
+            candidates.append((p, "--data"))
+            candidates.append((p / "data", "--data/data"))
+        else:
+            candidates.append((p.parent / "data", "--data sibling data/"))
+            candidates.append((p.parent, "--data parent"))
+
+    repo_data = Path(__file__).resolve().parent / "data"
+    candidates.append((repo_data, "repo data/"))
+
+    seen: set[str] = set()
+    tried: list[str] = []
+    for cand, label in candidates:
+        key = str(cand.resolve()) if cand.exists() else str(cand)
+        if key in seen:
+            continue
+        seen.add(key)
+        if _dir_has_csv(cand):
+            return str(cand), f"{label} -> {cand}"
+        tried.append(f"{label} -> {cand}")
+
+    return None, "no valid csv directory found; tried: " + "; ".join(tried)
 
 
 def _parse_args() -> argparse.Namespace:
@@ -57,7 +125,13 @@ def main() -> None:
         print(f"[AI-WARMUP][{warm_prefix}] {warm_msg}")
         print("[AI] Full auto-start skipped by default. Use --ai-autostart for strict startup checks.")
 
-    heatmap_ok, heatmap_msg = ensure_heatmap_service_running(args.data)
+    heatmap_data_root, heatmap_root_msg = _resolve_heatmap_data_root(args.data)
+    if heatmap_data_root:
+        print(f"[HEATMAP][INFO] data root: {heatmap_root_msg}")
+        heatmap_ok, heatmap_msg = _try_start_heatmap_service(heatmap_data_root)
+    else:
+        print(f"[HEATMAP][WARN] {heatmap_root_msg}")
+        heatmap_ok, heatmap_msg = _try_start_heatmap_service(args.data)
     heat_prefix = "OK" if heatmap_ok else "WARN"
     print(f"[HEATMAP][{heat_prefix}] {heatmap_msg}")
 

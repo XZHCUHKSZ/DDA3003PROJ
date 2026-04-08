@@ -1,5 +1,6 @@
 ﻿from __future__ import annotations
 
+import csv
 import json
 import re
 import threading
@@ -8,18 +9,39 @@ from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, urlencode, urlparse
+from urllib.request import urlopen
 
-import pandas as pd
 
-
-def _read_csv(path: Path) -> pd.DataFrame:
+def _read_csv_rows(path: Path) -> list[dict[str, str]]:
     for enc in ("utf-8", "utf-8-sig", "gbk", "gb18030"):
         try:
-            return pd.read_csv(path, encoding=enc)
+            with path.open("r", encoding=enc, newline="") as f:
+                return list(csv.DictReader(f))
         except Exception:
             continue
     raise RuntimeError(f"Cannot read csv: {path}")
+
+
+def _to_int(v: Any) -> int | None:
+    try:
+        if v is None:
+            return None
+        return int(float(str(v).strip()))
+    except Exception:
+        return None
+
+
+def _to_float(v: Any) -> float | None:
+    try:
+        if v is None:
+            return None
+        s = str(v).strip()
+        if s == "" or s == "--":
+            return None
+        return float(s)
+    except Exception:
+        return None
 
 
 def _month_days(month: str) -> list[str]:
@@ -33,7 +55,7 @@ def _month_days(month: str) -> list[str]:
     out: list[str] = []
     while cur < nxt:
         out.append(cur.strftime("%Y%m%d"))
-        cur = cur.replace(day=cur.day + 1) if False else datetime.fromordinal(cur.toordinal() + 1)
+        cur = datetime.fromordinal(cur.toordinal() + 1)
     return out
 
 
@@ -82,36 +104,35 @@ class HeatmapStore:
             if not fp:
                 continue
             try:
-                df = _read_csv(fp)
+                rows_raw = _read_csv_rows(fp)
             except Exception:
                 continue
-            if city not in df.columns:
+            if not rows_raw:
+                continue
+            if city not in rows_raw[0]:
                 continue
 
-            day_df = df[df["type"].astype(str).isin(candidates)].copy()
-            if day_df.empty:
+            typed_rows = [r for r in rows_raw if str(r.get("type", "")).strip() in candidates]
+            if not typed_rows:
                 continue
-            day_df["hour"] = pd.to_numeric(day_df["hour"], errors="coerce")
-            day_df = day_df.dropna(subset=["hour"])
-            day_df["hour"] = day_df["hour"].astype(int)
 
-            chosen = None
+            chosen_type_rows: list[dict[str, str]] | None = None
             for t in candidates:
-                sub = day_df[day_df["type"].astype(str) == t]
-                if not sub.empty:
-                    chosen = sub
+                subset = [r for r in typed_rows if str(r.get("type", "")).strip() == t]
+                if subset:
+                    chosen_type_rows = subset
                     break
-            if chosen is None:
+            if chosen_type_rows is None:
                 continue
 
-            for _, r in chosen.iterrows():
-                h = int(r["hour"])
-                if h < 0 or h > 23:
+            for r in chosen_type_rows:
+                h = _to_int(r.get("hour"))
+                if h is None or h < 0 or h > 23:
                     continue
-                v = pd.to_numeric(r.get(city), errors="coerce")
-                if pd.isna(v):
+                v = _to_float(r.get(city))
+                if v is None:
                     continue
-                rows.append([d, h, float(v)])
+                rows.append([d, h, v])
                 actual += 1
 
         payload = {
@@ -133,6 +154,20 @@ class HeatmapStore:
 class _HeatmapHandler(BaseHTTPRequestHandler):
     store: HeatmapStore | None = None
 
+    @classmethod
+    def _reload_store(cls, data_root: str) -> tuple[bool, str]:
+        root = Path(data_root)
+        store = HeatmapStore(root)
+        if root.exists():
+            try:
+                store.build_index()
+            except Exception as exc:
+                return False, f"index build failed: {exc}"
+        else:
+            store.date_to_file = {}
+        cls.store = store
+        return True, f"store reloaded: root={root}, indexed={len(store.date_to_file)}"
+
     def _send(self, code: int, obj: dict[str, Any]) -> None:
         raw = json.dumps(obj, ensure_ascii=False).encode("utf-8")
         self.send_response(code)
@@ -150,6 +185,19 @@ class _HeatmapHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path.startswith("/health"):
             self._send(200, {"ok": True, "service": "heatmap", "ready": self.store is not None})
+            return
+
+        if self.path.startswith("/api/heatmap/reload"):
+            q = parse_qs(urlparse(self.path).query)
+            data_root = (q.get("data_root", [""])[0] or "").strip()
+            if not data_root:
+                cur = str(self.store.data_root) if self.store is not None else ""
+                data_root = cur
+            if not data_root:
+                self._send(400, {"ok": False, "message": "missing data_root"})
+                return
+            ok, msg = self._reload_store(data_root)
+            self._send(200 if ok else 500, {"ok": ok, "message": msg})
             return
 
         if not self.path.startswith("/api/heatmap/monthly"):
@@ -178,26 +226,25 @@ class _HeatmapHandler(BaseHTTPRequestHandler):
 
 def ensure_heatmap_service_running(data_root: str, host: str = "127.0.0.1", port: int = 8791) -> tuple[bool, str]:
     root = Path(data_root)
-    if not root.exists():
-        return False, f"data path not found: {data_root}"
-
-    store = HeatmapStore(root)
-    try:
-        store.build_index()
-    except Exception as exc:
-        return False, f"index build failed: {exc}"
-
-    if not store.date_to_file:
-        return False, "no csv files indexed"
-
-    _HeatmapHandler.store = store
+    ok_reload, msg_reload = _HeatmapHandler._reload_store(str(root))
+    if not ok_reload:
+        return False, msg_reload
 
     try:
         server = ThreadingHTTPServer((host, port), _HeatmapHandler)
     except OSError:
-        # likely already running; treat as okay
-        return True, f"heatmap service already running at http://{host}:{port}"
+        # Already running in another process: ask that process to reload data root.
+        try:
+            q = urlencode({"data_root": str(root)})
+            with urlopen(f"http://{host}:{port}/api/heatmap/reload?{q}", timeout=3) as resp:
+                raw = resp.read().decode("utf-8", errors="ignore")
+            return True, f"heatmap service already running at http://{host}:{port}; {raw}"
+        except Exception as exc:
+            return True, f"heatmap service already running at http://{host}:{port}; reload skipped: {exc}"
 
     th = threading.Thread(target=server.serve_forever, daemon=True)
     th.start()
-    return True, f"heatmap service started at http://{host}:{port} (indexed {len(store.date_to_file)} days)"
+    indexed = len(_HeatmapHandler.store.date_to_file if _HeatmapHandler.store else {})
+    if not root.exists():
+        return True, f"heatmap service started at http://{host}:{port} (data path missing: {data_root})"
+    return True, f"heatmap service started at http://{host}:{port} (indexed {indexed} days from {root})"
