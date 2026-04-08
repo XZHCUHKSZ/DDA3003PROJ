@@ -14,6 +14,8 @@ SYSTEM_PROMPT = (
     '先讲结论，再解释原因，再给行动建议。请严格基于给定数据生成结论，'
     '每段结论都要附带来源ID，如[S1]。优先引用联网检索到的具体页面证据。'
     '禁止编造未提供的数据。'
+    '成因段请严格按 1) 2) 3) 4) 输出四条，单条尽量一句话。'
+    '其中第4条必须是经济与产业相关因素。'
     '输出必须是JSON对象，字段: settlement_text, diffusion_text, cause_text, confidence。'
 )
 
@@ -73,6 +75,7 @@ def _build_user_prompt(req: AnalysisRequest, sources: list[dict], profile: dict)
                 '对聚落分析做中文解读：必须通俗、完整、可执行建议、附来源ID引用。'
                 '成因段必须明确写出：1)当地经济体量判断；2)本地或所在省重点产业类型；'
                 '3)这些产业和污染物变化的关系；4)地理条件如何影响扩散。'
+                '最终输出时请重排为：1)污染与扩散主结论 2)地理/气象扩散条件 3)排放与产业机制 4)经济体量与产业结构（最后一条）。'
             ),
             'snapshot': req.snapshot.model_dump(by_alias=True),
             'history': req.history[-14:],
@@ -97,6 +100,8 @@ def _build_user_prompt(req: AnalysisRequest, sources: list[dict], profile: dict)
                 'must_include_geography_factor': True,
                 'prefer_detail': True,
                 'prefer_live_web_sources': True,
+                'cause_format': 'strict_numbered_1_to_4',
+                'cause_economic_last': True,
             },
         },
         ensure_ascii=False,

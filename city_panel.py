@@ -846,7 +846,7 @@ function formatCauseBulletList(text) {
         .trim();
     const ordered = [];
 
-    const markerRe = /(\\d{1,2})\\s*[\\.、\\)）]\\s*/g;
+    const markerRe = /(\\d{1,2})\\s*(?:[、\\)）]|\\.(?!\\d))\\s*/g;
     const marks = [];
     let mk;
     while ((mk = markerRe.exec(normalized)) !== null) {
