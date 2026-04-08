@@ -761,14 +761,14 @@ function buildSettlementGeoRegions(features, rows, dateStr) {
             name: name,
             itemStyle: {
                 areaColor: fillColor,
-                borderColor: '#213a57',
-                borderWidth: 2.0
+                borderColor: '#bfd1e3',
+                borderWidth: 0.9
             },
             emphasis: {
                 itemStyle: {
                     areaColor: fillColor,
-                    borderColor: '#0f2238',
-                    borderWidth: 2.4
+                    borderColor: '#9eb7d1',
+                    borderWidth: 1.1
                 }
             }
         };
@@ -884,8 +884,8 @@ async function renderSettlementMiniMap(centerCity, dateStr, rows) {
                 polyline: true,
                 data: [{ coords: circleCoords }],
                 lineStyle: {
-                    color: '#2563eb',
-                    width: 2,
+                    color: 'rgba(37,99,235,0.45)',
+                    width: 1.4,
                     type: 'dashed'
                 },
                 silent: true,

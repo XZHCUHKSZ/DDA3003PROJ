@@ -229,7 +229,6 @@ function buildCompareSeriesData(entry, cityCount, layoutMap) {
     const fontSize = getCompareLabelFontSize(cityCount);
     return entry.values.map((value, index) => {
         const priority = getCompareLabelPriority(index, entry.meta);
-        const showLabel = shouldShowCompareLabel(index, value, entry.meta, cityCount);
         const layout = layoutMap[entry.name + '::' + index] || {
             position: priority >= 3 ? 'top' : 'bottom',
             offsetY: priority >= 3 ? -6 : 6
@@ -244,7 +243,7 @@ function buildCompareSeriesData(entry, cityCount, layoutMap) {
                 borderColor: 'white'
             },
             label: {
-                show: showLabel,
+                show: false,
                 position: layout.position,
                 offset: [0, layout.offsetY],
                 color: '#1a2a4a',

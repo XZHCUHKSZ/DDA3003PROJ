@@ -1646,12 +1646,7 @@ function renderLineChart() {
                 color: '#1a2a4a',
                 fontSize: 11,
                 fontWeight: 'bold',
-                formatter: p => p.value != null ? p.value : '',
-                backgroundColor: 'rgba(255,255,255,0.85)',
-                borderRadius: 4,
-                padding: [2, 5],
-                borderColor: '#dde8f5',
-                borderWidth: 1
+                formatter: p => p.value != null ? p.value : ''
             },
             areaStyle: {
                 color: {
