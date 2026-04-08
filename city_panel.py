@@ -168,6 +168,47 @@ def build_css() -> str:
     font-weight: 700;
     color: #1a2a4a;
 }
+.pollutant-bar-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.pollutant-item {
+    border: 1px solid #e7eef8;
+    background: #fbfdff;
+    border-radius: 10px;
+    padding: 7px 9px;
+}
+.pollutant-item.active {
+    border-color: #1565c0;
+    box-shadow: 0 0 0 1px rgba(21,101,192,0.16) inset;
+}
+.pollutant-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+    font-size: 12px;
+}
+.pollutant-name {
+    color: #587ba2;
+    font-weight: 700;
+}
+.pollutant-value {
+    color: #1a2a4a;
+    font-weight: 800;
+}
+.pollutant-track {
+    height: 8px;
+    border-radius: 999px;
+    background: #e8f0fb;
+    overflow: hidden;
+}
+.pollutant-fill {
+    height: 100%;
+    border-radius: inherit;
+    transition: width 0.22s ease;
+}
 #healthAdvice {
     font-size: 13px;
     color: #4a6a8a;
@@ -447,6 +488,16 @@ def build_css() -> str:
     line-height: 1.65;
     white-space: pre-wrap;
 }
+.ai-cause-list {
+    margin: 0;
+    padding-left: 18px;
+    color: #2a4262;
+    font-size: 13px;
+    line-height: 1.75;
+}
+.ai-cause-list li {
+    margin-bottom: 5px;
+}
 #aiSources {
     margin-top: 10px;
     border-top: 1px dashed #dbe8f6;
@@ -532,31 +583,8 @@ def build_dom(all_dates: list[str], current_index: int) -> str:
 
         <div id="cityDetailPanel">
             <div class="detail-card">
-                <h3>{pollutants_title}</h3>
-                <div class="detail-row">
-                    <span class="detail-label">PM2.5</span>
-                    <span class="detail-value" id="cityPM25">-- ug/m3</span>
-                </div>
-                <div class="detail-row">
-                    <span class="detail-label">PM10</span>
-                    <span class="detail-value" id="cityPM10">-- ug/m3</span>
-                </div>
-                <div class="detail-row">
-                    <span class="detail-label">SO2</span>
-                    <span class="detail-value" id="citySO2">-- ug/m3</span>
-                </div>
-                <div class="detail-row">
-                    <span class="detail-label">NO2</span>
-                    <span class="detail-value" id="cityNO2">-- ug/m3</span>
-                </div>
-                <div class="detail-row">
-                    <span class="detail-label">O3</span>
-                    <span class="detail-value" id="cityO3">-- ug/m3</span>
-                </div>
-                <div class="detail-row">
-                    <span class="detail-label">O3_8h_24h</span>
-                    <span class="detail-value" id="cityCO">-- ug/m3</span>
-                </div>
+                <h3>{pollutants_title} (ug/m3)</h3>
+                <div class="pollutant-bar-list" id="pollutantBarList"></div>
             </div>
 
             <div class="detail-card">
@@ -595,7 +623,7 @@ def build_dom(all_dates: list[str], current_index: int) -> str:
             </div>
             <div class="ai-block">
                 <h4>{ui_texts.get("ai.section.causes")}</h4>
-                <p id="aiCauseText">--</p>
+                <div id="aiCauseText">--</div>
             </div>
         </div>
     </div>
@@ -657,6 +685,84 @@ function metricLabel(metric) {
     }[metric] || metric;
 }
 
+function pollutantDisplayName(metric) {
+    return {
+        'PM2.5_24h': 'PM2.5',
+        'PM10_24h': 'PM10',
+        'SO2_24h': 'SO2',
+        'NO2_24h': 'NO2',
+        'O3_8h': 'O3',
+        'O3_8h_24h': 'O3_8h_24h'
+    }[metric] || metric;
+}
+
+const POLLUTANT_COLOR_LEVELS = ['#00e400', '#ffff00', '#ff7e00', '#ff0000', '#99004c', '#7e0023'];
+const POLLUTANT_THRESHOLDS = {
+    'PM2.5_24h': [35, 75, 115, 150, 250],
+    'PM10_24h': [50, 150, 250, 350, 420],
+    'SO2_24h': [50, 150, 475, 800, 1600],
+    'NO2_24h': [40, 80, 180, 280, 565],
+    'O3_8h': [100, 160, 215, 265, 800],
+    'O3_8h_24h': [100, 160, 215, 265, 800]
+};
+
+function pollutantLevel(metric, value) {
+    if (value == null || Number.isNaN(Number(value))) return -1;
+    const v = Number(value);
+    const th = POLLUTANT_THRESHOLDS[metric];
+    if (!th) return -1;
+    if (v <= th[0]) return 0;
+    if (v <= th[1]) return 1;
+    if (v <= th[2]) return 2;
+    if (v <= th[3]) return 3;
+    if (v <= th[4]) return 4;
+    return 5;
+}
+
+function pollutantLevelText(level) {
+    return ['优', '良', '轻度污染', '中度污染', '重度污染', '严重污染'][level] || '无数据';
+}
+
+function renderPollutantBars(pollutants) {
+    const wrap = document.getElementById('pollutantBarList');
+    if (!wrap) return;
+
+    const rows = [
+        { key: 'PM2.5_24h', val: pollutants['PM2.5_24h'] },
+        { key: 'PM10_24h', val: pollutants['PM10_24h'] },
+        { key: 'SO2_24h', val: pollutants['SO2_24h'] },
+        { key: 'NO2_24h', val: pollutants['NO2_24h'] },
+        { key: 'O3_8h', val: pollutants['O3_8h'] },
+        { key: 'O3_8h_24h', val: pollutants['O3_8h_24h'] }
+    ].map(item => {
+        const n = (item.val == null || Number.isNaN(Number(item.val))) ? null : Number(item.val);
+        const lvl = pollutantLevel(item.key, n);
+        return { ...item, n, lvl };
+    });
+
+    rows.sort((a, b) => {
+        const la = a.lvl < 0 ? -1 : a.lvl;
+        const lb = b.lvl < 0 ? -1 : b.lvl;
+        if (lb !== la) return lb - la;
+        return (b.n ?? -1) - (a.n ?? -1);
+    });
+
+    const maxVal = rows.reduce((m, r) => Math.max(m, r.n ?? 0), 1);
+    wrap.innerHTML = rows.map(r => {
+        const active = selectedMetric === r.key ? ' active' : '';
+        const valText = r.n == null ? '--' : String(r.n);
+        const levelText = pollutantLevelText(r.lvl);
+        const color = r.lvl >= 0 ? POLLUTANT_COLOR_LEVELS[r.lvl] : '#9fb3c8';
+        const width = r.n == null ? 0 : Math.max(12, Math.round((r.n / maxVal) * 100));
+        const title = `${pollutantDisplayName(r.key)} ${valText} ug/m3 | ${levelText}`;
+        return `<div class="pollutant-item${active}" title="${title}">`
+            + `<div class="pollutant-head"><span class="pollutant-name">${pollutantDisplayName(r.key)}</span>`
+            + `<span class="pollutant-value">${valText}</span></div>`
+            + `<div class="pollutant-track"><div class="pollutant-fill" style="width:${width}%;background:${color};"></div></div>`
+            + `</div>`;
+    }).join('');
+}
+
 const CITY_TREND_CACHE = new Map();
 function getCityTrendValues(cityName, metric, startIdx, endIdx) {
     const key = cityName + '::' + metric + '::' + startIdx + '::' + endIdx;
@@ -692,6 +798,35 @@ function stripSourceMarks(text) {
         .replace(/\\s{2,}/g, ' ')
         .replace(/\\s+([，。！？；：])/g, '$1')
         .trim();
+}
+
+function escapeHtml(text) {
+    return String(text || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function formatCauseBulletList(text) {
+    const cleaned = stripSourceMarks(text || '');
+    if (!cleaned) return '<ol class="ai-cause-list"><li>--</li></ol>';
+
+    let lines = cleaned
+        .replace(/\\r/g, '')
+        .split(/\\n|；|。/)
+        .map(s => s.trim())
+        .filter(Boolean);
+
+    if (!lines.length) lines = [cleaned];
+    const econLines = lines.filter(s => /经济|GDP|产业|工业|制造业/.test(s));
+    const nonEconLines = lines.filter(s => !/经济|GDP|产业|工业|制造业/.test(s));
+    const ordered = [...nonEconLines, ...econLines].slice(0, 6);
+
+    return '<ol class="ai-cause-list">'
+        + ordered.map(item => `<li>${escapeHtml(item)}</li>`).join('')
+        + '</ol>';
 }
 
 const AI_CONFIG_STORAGE_KEY = 'APP_AI_SETTINGS';
@@ -1039,7 +1174,8 @@ function resetAIInsightDisplay(statusText) {
     setText('aiStatus', statusText || t('ai.empty'));
     setText('aiSettlementText', '--');
     setText('aiDiffusionText', '--');
-    setText('aiCauseText', '--');
+    const causeEl = document.getElementById('aiCauseText');
+    if (causeEl) causeEl.innerHTML = '--';
     if (blocks) blocks.style.display = 'none';
     if (sources) sources.style.display = 'none';
     if (list) list.innerHTML = '';
@@ -1099,7 +1235,8 @@ function renderAIInsight(insightData, statusText) {
     const blocks = document.getElementById('aiBlocks');
     setText('aiSettlementText', stripSourceMarks(insightData?.settlement_text || '--'));
     setText('aiDiffusionText', stripSourceMarks(insightData?.diffusion_text || '--'));
-    setText('aiCauseText', stripSourceMarks(insightData?.cause_text || '--'));
+    const causeEl = document.getElementById('aiCauseText');
+    if (causeEl) causeEl.innerHTML = formatCauseBulletList(insightData?.cause_text || '--');
     setText('aiStatus', withAIDisclaimer(statusText || insightData?.status_text || t('ai.empty')));
     if (blocks) blocks.style.display = 'grid';
 }
@@ -1333,29 +1470,8 @@ function updateCityPanel() {
         setText('levelBadge', t('city.no_data'));
     }
 
-    const metricToId = {
-        'PM2.5_24h': 'cityPM25',
-        'PM10_24h': 'cityPM10',
-        'SO2_24h': 'citySO2',
-        'NO2_24h': 'cityNO2',
-        'O3_8h': 'cityO3',
-        'O3_8h_24h': 'cityCO'
-    };
-
-    setText('cityPM25', (pollutants['PM2.5_24h'] ?? '--') + ' ug/m3');
-    setText('cityPM10', (pollutants['PM10_24h'] ?? '--') + ' ug/m3');
-    setText('citySO2', (pollutants['SO2_24h'] ?? '--') + ' ug/m3');
-    setText('cityNO2', (pollutants['NO2_24h'] ?? '--') + ' ug/m3');
-    setText('cityO3', (pollutants['O3_8h'] ?? '--') + ' ug/m3');
-    setText('cityCO', (pollutants['O3_8h_24h'] ?? '--') + ' ug/m3');
+    renderPollutantBars(pollutants);
     setText('healthAdvice', info ? info.advice : t('city.no_data_day'));
-
-    document.querySelectorAll('.detail-row').forEach(row => row.classList.remove('highlight-row'));
-    if (selectedMetric !== 'AQI') {
-        const hlId = metricToId[selectedMetric];
-        const el = hlId ? document.getElementById(hlId) : null;
-        if (el) el.closest('.detail-row').classList.add('highlight-row');
-    }
 
     renderLineChart();
     if (typeof renderSettlementAnalysis === 'function') {

@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 import json
+import re
 import uuid
 from datetime import datetime, timezone
 
@@ -14,6 +15,7 @@ SYSTEM_PROMPT = (
     '先讲结论，再解释原因，再给行动建议。请严格基于给定数据生成结论，'
     '每段结论都要附带来源ID，如[S1]。优先引用联网检索到的具体页面证据。'
     '禁止编造未提供的数据。'
+    '成因段请按条目写（每条一句到两句），并把“经济/产业”相关条目放在最后。'
     '输出必须是JSON对象，字段: settlement_text, diffusion_text, cause_text, confidence。'
 )
 
@@ -53,16 +55,31 @@ def _build_fallback(req: AnalysisRequest, profile: dict) -> tuple[str, str, str,
         f"{s.diffusion_detail or '从内外圈差值看，短期方向仍需持续观察。'}"
         '结合气象条件（风速风向、边界层高度、湿度与降水）同看，能更好区分“本地累积”还是“外来输送”。 [S1][S2][S6]'
     )
-    cause_parts = []
-    if econ_text:
-        cause_parts.append(f"{s.city} 的经济画像可概括为“{econ_text}”。 [S3][S4]")
-    if industry_text:
-        cause_parts.append(f"本地/周边产业结构可关注：{industry_text}，其活动强度变化会影响污染排放强弱。 [S3][S4]")
+    cause_items: list[str] = []
     if geo_factors:
-        cause_parts.append(f"地理条件因素：{s.city} 具有“{'、'.join(geo_factors[:3])}”等特征，会影响污染物扩散与滞留。 [S3]")
-    cause_parts.append('建议结合风速风向、湿度和降水继续验证，并关注连续3天以上同向变化。 [S1][S2]')
-    cause = ''.join(cause_parts)
+        cause_items.append(f"地理地形方面：{s.city} 具有“{'、'.join(geo_factors[:3])}”等特征，可能改变污染物扩散与滞留路径。 [S3]")
+    cause_items.append("气象条件方面：风速风向、边界层高度、湿度和降水会直接影响本地累积与区域输送强度。 [S1][S2]")
+    cause_items.append("排放结构方面：交通、燃烧与工业过程的阶段性波动，会改变污染物短期浓度水平。 [S1][S4]")
+    if industry_text:
+        cause_items.append(f"产业因素：本地/周边产业结构可关注 {industry_text}，其活动强度变化会传导到污染排放。 [S3][S4]")
+    if econ_text:
+        cause_items.append(f"经济因素：{s.city} 的经济画像可概括为“{econ_text}”，经济活跃度变化会影响排放总量与时段分布。 [S3][S4]")
+    cause = "\n".join(f"{idx+1}. {item}" for idx, item in enumerate(cause_items))
     return settlement, diffusion, cause, 0.62
+
+
+def _order_cause_items(cause_text: str) -> str:
+    txt = (cause_text or "").strip()
+    if not txt:
+        return txt
+    parts = [p.strip() for p in re.split(r"\n+|[；。]", txt) if p.strip()]
+    if not parts:
+        return txt
+    clean = [re.sub(r"^\d+[\.、]\s*", "", p).strip() for p in parts]
+    econ = [p for p in clean if re.search(r"经济|GDP|产业|工业|制造业", p)]
+    non_econ = [p for p in clean if p not in econ]
+    ordered = (non_econ + econ)[:6]
+    return "\n".join(f"{idx+1}. {item}" for idx, item in enumerate(ordered))
 
 
 def _build_user_prompt(req: AnalysisRequest, sources: list[dict], profile: dict) -> str:
@@ -116,7 +133,7 @@ def _ensure_specific_cause(cause_text: str, req: AnalysisRequest, profile: dict)
     has_geo = ('地理' in cause_text) or ('沿海' in cause_text) or ('盆地' in cause_text) or ('山地' in cause_text) or ('平原' in cause_text)
 
     if has_city and ((not industries and not econ) or (has_econ and (has_industry or not industries))) and (has_geo or not geo_factors):
-        return cause_text
+        return _order_cause_items(cause_text)
 
     industry_text = '、'.join(industries[:5]) if industries else ''
     region_text = f'{province}{city}' if province else city
@@ -132,9 +149,8 @@ def _ensure_specific_cause(cause_text: str, req: AnalysisRequest, profile: dict)
         supplements.append(line)
     if geo_factors and not has_geo:
         supplements.append(f"\n地理条件因素：{city}具备“{'、'.join(geo_factors[:3])}”等特征，可能改变污染物的扩散效率与累积位置。 [S3]")
-    if not supplements:
-        return cause_text
-    return (cause_text.rstrip() + ''.join(supplements)).strip()
+    merged = cause_text if not supplements else (cause_text.rstrip() + ''.join(supplements)).strip()
+    return _order_cause_items(merged)
 
 
 def run_analysis(req: AnalysisRequest, *, api_key: str = '') -> AnalysisResponse:
