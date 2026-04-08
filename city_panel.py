@@ -861,16 +861,30 @@ function formatCauseBulletList(text) {
             .map(x => x.text)
             .filter(Boolean);
     } else {
+        const inlineNumbered = [];
+        const inlineRe = /(\\d+)\\s*[\\.\\)、)]\\s*([^\\n]+?)(?=(?:\\s+\\d+\\s*[\\.\\)、)]\\s*)|$)/g;
+        let m;
+        while ((m = inlineRe.exec(normalized)) !== null) {
+            const txt = String(m[2] || '').trim();
+            if (txt) inlineNumbered.push(txt);
+        }
+        if (inlineNumbered.length >= 2) {
+            orderedTexts = inlineNumbered;
+        } else {
         lines = normalized
             .split(/\\n|；|。/)
             .map(s => s.trim())
             .filter(Boolean);
         if (!lines.length) lines = [cleaned];
         orderedTexts = lines;
+        }
     }
 
     if (!orderedTexts.length) orderedTexts = [cleaned];
     if (orderedTexts.length > 6) orderedTexts = orderedTexts.slice(0, 6);
+    orderedTexts = orderedTexts
+        .map(s => s.replace(/^\\d+\\s*[\\.\\)、)]\\s*/, '').trim())
+        .filter(s => s && !/^\\d+$/.test(s));
 
     const econLines = orderedTexts.filter(s => /经济|GDP|产业|工业|制造业/.test(s));
     const nonEconLines = orderedTexts.filter(s => !/经济|GDP|产业|工业|制造业/.test(s));
