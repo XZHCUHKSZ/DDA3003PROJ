@@ -840,47 +840,48 @@ function formatCauseBulletList(text) {
         return '<div class="ai-cause-grid"><div class="ai-cause-item"><div class="ai-cause-no">1</div><div class="ai-cause-text">--</div></div></div>';
     }
 
-    const normalized = cleaned.replace(/\\r/g, ' ').trim();
+    const normalized = cleaned
+        .replace(/\\r/g, '\\n')
+        .replace(/(^|\\n)\\s*(\\d{1,2})\\s*(?=\\n)/g, '$1$2）')
+        .trim();
     const ordered = [];
-    const inlineRe = /(?:^|[\\s\\n])(\\d{1,2})\\s*[\\.、\\)）]\\s*([\\s\\S]*?)(?=(?:[\\s\\n]+\\d{1,2}\\s*[\\.、\\)）]\\s*)|$)/g;
-    let m;
-    while ((m = inlineRe.exec(normalized)) !== null) {
-        const piece = String(m[2] || '').trim();
-        if (piece && !/^\\d+$/.test(piece)) ordered.push(piece);
+
+    const markerRe = /(\\d{1,2})\\s*[\\.、\\)）]\\s*/g;
+    const marks = [];
+    let mk;
+    while ((mk = markerRe.exec(normalized)) !== null) {
+        marks.push({ start: mk.index, end: markerRe.lastIndex });
     }
+    if (marks.length >= 2 || (marks.length === 1 && marks[0].start <= 2)) {
+        for (let i = 0; i < marks.length; i++) {
+            const segStart = marks[i].end;
+            const segEnd = i + 1 < marks.length ? marks[i + 1].start : normalized.length;
+            const piece = normalized
+                .slice(segStart, segEnd)
+                .replace(/^[\\s；;，,]+/, '')
+                .replace(/[\\s；;]+$/, '')
+                .trim();
+            if (piece && !/^\\d+$/.test(piece)) ordered.push(piece);
+        }
+    }
+
     if (!ordered.length) {
-        const rawLines = normalized
+        const lines = normalized
             .split('\\n')
             .map(s => s.trim())
-            .filter(Boolean);
-        const mergedLines = [];
-        for (let i = 0; i < rawLines.length; i++) {
-            const cur = rawLines[i];
-            if (/^\\d{1,2}$/.test(cur) && i + 1 < rawLines.length) {
-                const nxt = rawLines[i + 1];
-                mergedLines.push(`${cur}） ${nxt}`);
-                i += 1;
-                continue;
-            }
-            mergedLines.push(cur);
-        }
-        const lines = mergedLines
+            .filter(Boolean)
             .map(s => s.replace(/^\\d+\\s*[\\.、\\)）]\\s*/, '').trim())
             .filter(s => s && !/^\\d+$/.test(s));
-        if (lines.length >= 2) {
-            ordered.push(...lines);
-        }
+        if (lines.length >= 2) ordered.push(...lines);
     }
     if (!ordered.length) {
         const semi = normalized
             .split(/[；;]/)
             .map(s => s.trim())
             .filter(Boolean)
-            .map(s => s.replace(/^\\d+\\s*[\\.\\)、)]\\s*/, '').trim())
+            .map(s => s.replace(/^\\d+\\s*[\\.、\\)）]\\s*/, '').trim())
             .filter(s => s && !/^\\d+$/.test(s));
-        if (semi.length >= 2) {
-            ordered.push(...semi);
-        }
+        if (semi.length >= 2) ordered.push(...semi);
     }
     if (!ordered.length) {
         ordered.push(normalized);
