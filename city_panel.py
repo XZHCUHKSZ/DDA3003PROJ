@@ -840,91 +840,42 @@ function formatCauseBulletList(text) {
         return '<div class="ai-cause-grid"><div class="ai-cause-item"><div class="ai-cause-no">1</div><div class="ai-cause-text">--</div></div></div>';
     }
 
-    const normalized = cleaned.replace(/\\r/g, '');
-    let lines = normalized
-        .split('\\n')
-        .map(s => s.trim())
-        .filter(Boolean);
-
-    const numbered = lines
-        .map(line => line.replace(/^[-*]\\s*/, '').trim())
-        .map(line => {
-            const m = line.match(/^(\\d+)\\s*[\\.\\)、)]\\s*(.+)$/);
-            return m ? { no: Number(m[1]), text: m[2].trim() } : null;
-        })
-        .filter(Boolean);
-
-    let orderedTexts = [];
-    if (numbered.length >= 2) {
-        orderedTexts = numbered
-            .sort((a, b) => a.no - b.no)
-            .map(x => x.text)
-            .filter(Boolean);
-    } else {
-        const inlineNumbered = [];
-        const inlineRe = /(\\d+)\\s*[\\.\\)、)]\\s*([^\\n]+?)(?=(?:\\s+\\d+\\s*[\\.\\)、)]\\s*)|$)/g;
-        let m;
-        while ((m = inlineRe.exec(normalized)) !== null) {
-            const txt = String(m[2] || '').trim();
-            if (txt) inlineNumbered.push(txt);
-        }
-        if (inlineNumbered.length >= 2) {
-            orderedTexts = inlineNumbered;
-        } else {
-        lines = normalized
-            .split(/\\n|；|。/)
+    const normalized = cleaned.replace(/\\r/g, ' ').trim();
+    const ordered = [];
+    const inlineRe = /(\\d+)\\s*[\\.\\)、)]\\s*([^\\n]+?)(?=(?:\\s+\\d+\\s*[\\.\\)、)]\\s*)|$)/g;
+    let m;
+    while ((m = inlineRe.exec(normalized)) !== null) {
+        const piece = String(m[2] || '').trim();
+        if (piece && !/^\\d+$/.test(piece)) ordered.push(piece);
+    }
+    if (!ordered.length) {
+        const lines = normalized
+            .split('\\n')
             .map(s => s.trim())
-            .filter(Boolean);
-        if (!lines.length) lines = [cleaned];
-        orderedTexts = lines;
+            .filter(Boolean)
+            .map(s => s.replace(/^\\d+\\s*[\\.\\)、)]\\s*/, '').trim())
+            .filter(s => s && !/^\\d+$/.test(s));
+        if (lines.length >= 2) {
+            ordered.push(...lines);
         }
     }
-
-    if (!orderedTexts.length) orderedTexts = [cleaned];
-    if (orderedTexts.length > 8) orderedTexts = orderedTexts.slice(0, 8);
-    orderedTexts = orderedTexts
-        .map(s => s.replace(/^\\d+\\s*[\\.\\)、)]\\s*/, '').trim())
-        .filter(s => s && !/^\\d+$/.test(s));
-
-    const normalizedItems = [];
-    for (const raw of orderedTexts) {
-        const item = String(raw || '').trim();
-        if (!item) continue;
-        const hasTitle = item.includes('：');
-        const startsWithConnector = /^(而|并且|且|同时|另外|此外|并|但|但是)/.test(item);
-
-        if (!hasTitle && startsWithConnector && normalizedItems.length === 0) {
-            continue;
-        }
-        if (!hasTitle && normalizedItems.length > 0) {
-            normalizedItems[normalizedItems.length - 1] += '；' + item;
-            continue;
-        }
-        normalizedItems.push(item);
-    }
-    if (normalizedItems.length) {
-        orderedTexts = normalizedItems;
-    }
-    const titled = orderedTexts.filter(s => s.includes('：'));
-    if (titled.length >= 2) {
-        orderedTexts = titled;
-    }
-    if (orderedTexts.length === 1) {
-        const semiSplit = String(orderedTexts[0] || '')
+    if (!ordered.length) {
+        const semi = normalized
             .split(/[；;]/)
             .map(s => s.trim())
-            .filter(Boolean);
-        if (semiSplit.length >= 2) {
-            orderedTexts = semiSplit;
+            .filter(Boolean)
+            .map(s => s.replace(/^\\d+\\s*[\\.\\)、)]\\s*/, '').trim())
+            .filter(s => s && !/^\\d+$/.test(s));
+        if (semi.length >= 2) {
+            ordered.push(...semi);
         }
     }
-
-    const econLines = orderedTexts.filter(s => /经济|GDP|产业|工业|制造业/.test(s));
-    const nonEconLines = orderedTexts.filter(s => !/经济|GDP|产业|工业|制造业/.test(s));
-    const ordered = [...nonEconLines, ...econLines].slice(0, 6);
-
+    if (!ordered.length) {
+        ordered.push(normalized);
+    }
+    const trimmed = ordered.slice(0, 6);
     return '<div class="ai-cause-grid">'
-        + ordered.map((item, idx) =>
+        + trimmed.map((item, idx) =>
             `<div class="ai-cause-item"><div class="ai-cause-no">${idx + 1}</div><div class="ai-cause-text">${escapeHtml(item)}</div></div>`
         ).join('')
         + '</div>';
@@ -1469,11 +1420,11 @@ async function generateAIInsight() {
         const headers = { 'Content-Type': 'application/json' };
         if (aiRuntimeConfig.apiKey) headers['X-API-Key'] = aiRuntimeConfig.apiKey;
         const base = (AI_ANALYSIS_API_BASE || 'http://127.0.0.1:8787').replace(/\\/$/, '');
-        const resp = await fetch(base + '/api/analysis/settlement', {
+        const resp = await fetchWithTimeout(base + '/api/analysis/settlement', {
             method: 'POST',
             headers: headers,
             body: JSON.stringify(payload)
-        });
+        }, 90000);
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
         const data = await resp.json();
 
