@@ -62,8 +62,39 @@ def build_css() -> str:
 }
 #settlementMapLegend {
     margin-top: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
     font-size: 12px;
     color: #6b8cba;
+}
+#settlementLegendText {
+    color: #6b8cba;
+}
+#settlementLegendScale {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.settlement-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    border: 1px solid #e2ebf7;
+    background: #f8fbff;
+    color: #56789e;
+    font-size: 11px;
+    white-space: nowrap;
+}
+.settlement-legend-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    border: 1px solid rgba(255,255,255,0.9);
+    box-shadow: 0 0 0 1px rgba(21,101,192,0.08);
+    flex-shrink: 0;
 }
 #settlementMapControls {
     position: absolute;
@@ -463,7 +494,10 @@ function ensureSettlementUI() {
             <button id="settlementCompareBtn" title="切换聚落对比折线">对比</button>
             <div id="settlementMap"></div>
         </div>
-        <div id="settlementMapLegend">颜色按当前指标分级；粗边框表示半径圈内地级市；蓝色虚线圈为分析半径。</div>
+        <div id="settlementMapLegend">
+            <div id="settlementLegendText">颜色按当前指标分级；蓝色虚线圈为分析半径。</div>
+            <div id="settlementLegendScale"></div>
+        </div>
         <div id="settlementSummary"></div>
         <div id="settlementNarrative">--</div>
     `;
@@ -518,6 +552,7 @@ function ensureSettlementUI() {
     });
 
     settlementUIReady = true;
+    renderSettlementLegendScale();
 }
 
 function setSettlementLayoutVisible(visible) {
@@ -708,7 +743,17 @@ function renderSettlementCompareInMainChart() {
 
 function getSettlementMetricColor(metric, value) {
     if (value == null || Number.isNaN(value)) return '#dbe7f3';
-    const pollutantThresholds = {
+    const levels = getSettlementPollutantThresholds()[metric];
+    if (!levels) return getAQIColor(value);
+    const colors = getSettlementLevelColors();
+    for (let i = 0; i < levels.length; i++) {
+        if (value <= levels[i]) return colors[i];
+    }
+    return colors[colors.length - 1];
+}
+
+function getSettlementPollutantThresholds() {
+    return {
         'PM2.5_24h': [35, 75, 115, 150, 250],
         'PM10_24h': [50, 150, 250, 350, 420],
         'SO2_24h': [50, 150, 475, 800, 1600],
@@ -716,13 +761,57 @@ function getSettlementMetricColor(metric, value) {
         'O3_8h': [100, 160, 215, 265, 800],
         'O3_8h_24h': [100, 160, 215, 265, 800]
     };
-    const levels = pollutantThresholds[metric];
-    if (!levels) return getAQIColor(value);
-    const colors = ['#22c55e', '#eaf000', '#ff8a00', '#ff2d2d', '#8f3f97', '#7e0023'];
-    for (let i = 0; i < levels.length; i++) {
-        if (value <= levels[i]) return colors[i];
+}
+
+function getSettlementLevelColors() {
+    if (typeof POLLUTANT_COLOR_LEVELS !== 'undefined' && Array.isArray(POLLUTANT_COLOR_LEVELS) && POLLUTANT_COLOR_LEVELS.length >= 6) {
+        return POLLUTANT_COLOR_LEVELS.slice(0, 6);
     }
-    return colors[colors.length - 1];
+    return ['#00e400', '#ffff00', '#ff7e00', '#ff0000', '#99004c', '#7e0023'];
+}
+
+function getSettlementLegendPieces(metric) {
+    if (typeof getMetricLegendPieces === 'function') {
+        return getMetricLegendPieces(metric);
+    }
+    const colors = getSettlementLevelColors();
+    if (metric === 'AQI') {
+        return [
+            { label: '优', range: '0-50', color: colors[0] },
+            { label: '良', range: '51-100', color: colors[1] },
+            { label: '轻度', range: '101-150', color: colors[2] },
+            { label: '中度', range: '151-200', color: colors[3] },
+            { label: '重度', range: '201-300', color: colors[4] },
+            { label: '严重', range: '>300', color: colors[5] }
+        ];
+    }
+    const th = getSettlementPollutantThresholds()[metric];
+    if (!th || th.length < 5) return [];
+    return [
+        { label: '优', range: `0-${th[0]}`, color: colors[0] },
+        { label: '良', range: `${th[0] + 1}-${th[1]}`, color: colors[1] },
+        { label: '轻度', range: `${th[1] + 1}-${th[2]}`, color: colors[2] },
+        { label: '中度', range: `${th[2] + 1}-${th[3]}`, color: colors[3] },
+        { label: '重度', range: `${th[3] + 1}-${th[4]}`, color: colors[4] },
+        { label: '严重', range: `>${th[4]}`, color: colors[5] }
+    ];
+}
+
+function renderSettlementLegendScale() {
+    const textEl = document.getElementById('settlementLegendText');
+    const scaleEl = document.getElementById('settlementLegendScale');
+    if (!textEl || !scaleEl) return;
+    const metric = selectedMetric === 'AQI' ? 'AQI' : selectedMetric;
+    const metricName = (typeof compareMetricLabel === 'function')
+        ? compareMetricLabel(metric)
+        : ((typeof metricLabel === 'function') ? metricLabel(metric) : metric);
+    textEl.textContent = `颜色按当前指标分级（${metricName}）；蓝色虚线圈为分析半径。`;
+    const pieces = getSettlementLegendPieces(metric);
+    scaleEl.innerHTML = pieces.map(p =>
+        `<span class="settlement-legend-item" title="${metricName} ${p.label} ${p.range}">`
+        + `<span class="settlement-legend-dot" style="background:${p.color};"></span>`
+        + `<span>${p.label} ${p.range}</span></span>`
+    ).join('');
 }
 
 function updateSettlementSummary(rows, diffusion, centerCity, radiusKm, endIdx) {
@@ -1062,6 +1151,7 @@ async function renderSettlementAnalysis() {
     }
     panel.style.display = 'block';
     setSettlementLayoutVisible(true);
+    renderSettlementLegendScale();
     if (settlementLastCenterCity !== currentCityName) {
         settlementLastCenterCity = currentCityName;
         settlementViewZoom = null;

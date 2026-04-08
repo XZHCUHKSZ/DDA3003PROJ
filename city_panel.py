@@ -209,6 +209,48 @@ def build_css() -> str:
     border-radius: inherit;
     transition: width 0.22s ease;
 }
+.pollutant-meta {
+    margin-bottom: 10px;
+}
+#pollutantSortHint {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 800;
+    color: #2f5f93;
+    margin-bottom: 8px;
+}
+.pollutant-sort-arrow {
+    font-size: 18px;
+    line-height: 1;
+    color: #1565c0;
+}
+#pollutantLegend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.pollutant-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    border: 1px solid #e2ebf7;
+    background: #f8fbff;
+    color: #56789e;
+    font-size: 11px;
+    white-space: nowrap;
+}
+.pollutant-legend-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    border: 1px solid rgba(255,255,255,0.9);
+    box-shadow: 0 0 0 1px rgba(21,101,192,0.08);
+    flex-shrink: 0;
+}
 #healthAdvice {
     font-size: 13px;
     color: #4a6a8a;
@@ -663,6 +705,10 @@ def build_dom(all_dates: list[str], current_index: int) -> str:
         <div id="cityDetailPanel">
             <div class="detail-card">
                 <h3>{pollutants_title} (ug/m3)</h3>
+                <div class="pollutant-meta">
+                    <div id="pollutantSortHint"><span class="pollutant-sort-arrow">↓</span>严重程度降序</div>
+                    <div id="pollutantLegend"></div>
+                </div>
                 <div class="pollutant-bar-list" id="pollutantBarList"></div>
             </div>
 
@@ -807,9 +853,51 @@ function pollutantLevelText(level) {
     return ['优', '良', '轻度污染', '中度污染', '重度污染', '严重污染'][level] || '无数据';
 }
 
+function getMetricLegendPieces(metric) {
+    const colors = POLLUTANT_COLOR_LEVELS.slice();
+    if (metric === 'AQI') {
+        return [
+            { label: '优', range: '0-50', color: colors[0] },
+            { label: '良', range: '51-100', color: colors[1] },
+            { label: '轻度', range: '101-150', color: colors[2] },
+            { label: '中度', range: '151-200', color: colors[3] },
+            { label: '重度', range: '201-300', color: colors[4] },
+            { label: '严重', range: '>300', color: colors[5] }
+        ];
+    }
+    const th = POLLUTANT_THRESHOLDS[metric];
+    if (!th || th.length < 5) return [];
+    return [
+        { label: '优', range: `0-${th[0]}`, color: colors[0] },
+        { label: '良', range: `${th[0] + 1}-${th[1]}`, color: colors[1] },
+        { label: '轻度', range: `${th[1] + 1}-${th[2]}`, color: colors[2] },
+        { label: '中度', range: `${th[2] + 1}-${th[3]}`, color: colors[3] },
+        { label: '重度', range: `${th[3] + 1}-${th[4]}`, color: colors[4] },
+        { label: '严重', range: `>${th[4]}`, color: colors[5] }
+    ];
+}
+
+function renderPollutantLegend() {
+    const legendWrap = document.getElementById('pollutantLegend');
+    const sortHint = document.getElementById('pollutantSortHint');
+    if (!legendWrap || !sortHint) return;
+    const legendMetric = selectedMetric === 'AQI' ? 'AQI' : selectedMetric;
+    const metricName = legendMetric === 'AQI'
+        ? 'AQI'
+        : pollutantDisplayName(legendMetric) + ' (ug/m3)';
+    sortHint.innerHTML = '<span class="pollutant-sort-arrow">↓</span>严重程度降序';
+    const pieces = getMetricLegendPieces(legendMetric);
+    legendWrap.innerHTML = pieces.map(p =>
+        `<span class="pollutant-legend-item" title="${metricName} ${p.label} ${p.range}">`
+        + `<span class="pollutant-legend-dot" style="background:${p.color};"></span>`
+        + `<span>${p.label} ${p.range}</span></span>`
+    ).join('');
+}
+
 function renderPollutantBars(pollutants) {
     const wrap = document.getElementById('pollutantBarList');
     if (!wrap) return;
+    renderPollutantLegend();
 
     const rows = [
         { key: 'PM2.5_24h', val: pollutants['PM2.5_24h'] },
