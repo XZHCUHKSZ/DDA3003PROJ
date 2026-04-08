@@ -248,6 +248,7 @@ def build_css() -> str:
     border: 1px solid #dde8f5;
     border-radius: 14px;
     box-shadow: 0 2px 12px rgba(21,101,192,0.06);
+    box-sizing: border-box;
     padding: 12px 14px 14px;
     display: flex;
     flex-direction: column;
