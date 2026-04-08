@@ -909,6 +909,15 @@ function formatCauseBulletList(text) {
     if (titled.length >= 2) {
         orderedTexts = titled;
     }
+    if (orderedTexts.length === 1) {
+        const semiSplit = String(orderedTexts[0] || '')
+            .split(/[；;]/)
+            .map(s => s.trim())
+            .filter(Boolean);
+        if (semiSplit.length >= 2) {
+            orderedTexts = semiSplit;
+        }
+    }
 
     const econLines = orderedTexts.filter(s => /经济|GDP|产业|工业|制造业/.test(s));
     const nonEconLines = orderedTexts.filter(s => !/经济|GDP|产业|工业|制造业/.test(s));
