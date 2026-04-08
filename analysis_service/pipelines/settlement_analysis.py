@@ -10,13 +10,14 @@ from analysis_service.sources.registry import build_default_sources
 
 
 SYSTEM_PROMPT = (
-    '你是空气质量聚落分析助手。请用普通人能看懂的中文表达，不要堆术语。'
+    '你是空气质量聚落分析助手。请使用专业但可读的中文，结论要完整、连贯，不要碎片化短句。'
     '先讲结论，再解释原因，再给行动建议。请严格基于给定数据生成结论，'
     '每段结论都要附带来源ID，如[S1]。优先引用联网检索到的具体页面证据。'
     '禁止编造未提供的数据。'
-    '成因段请严格按 1) 2) 3) 4) 输出四条，单条尽量一句话。'
+    '成因段请严格按 1）2）3）4） 输出四条，每条2-3句，说明因果链条。'
     '其中第4条必须是经济与产业相关因素。'
     '输出必须是JSON对象，字段: settlement_text, diffusion_text, cause_text, confidence。'
+    '其中 settlement_text 与 diffusion_text 各不少于120字。'
 )
 
 
@@ -64,7 +65,7 @@ def _build_fallback(req: AnalysisRequest, profile: dict) -> tuple[str, str, str,
         cause_items.append(f"产业因素：本地/周边产业结构可关注 {industry_text}，其活动强度变化会传导到污染排放。 [S3][S4]")
     if econ_text:
         cause_items.append(f"经济因素：{s.city} 的经济画像可概括为“{econ_text}”，经济活跃度变化会影响排放总量与时段分布。 [S3][S4]")
-    cause = "\n".join(f"{idx+1}. {item}" for idx, item in enumerate(cause_items))
+    cause = "\n".join(f"{idx+1}）{item}" for idx, item in enumerate(cause_items))
     return settlement, diffusion, cause, 0.62
 
 
@@ -100,8 +101,10 @@ def _build_user_prompt(req: AnalysisRequest, sources: list[dict], profile: dict)
                 'must_include_geography_factor': True,
                 'prefer_detail': True,
                 'prefer_live_web_sources': True,
-                'cause_format': 'strict_numbered_1_to_4',
+                'cause_format': 'strict_numbered_1p_to_4p',
                 'cause_economic_last': True,
+                'min_length_settlement': 120,
+                'min_length_diffusion': 120,
             },
         },
         ensure_ascii=False,

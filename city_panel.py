@@ -321,6 +321,61 @@ def build_css() -> str:
     flex-wrap: wrap;
     box-shadow: 0 2px 12px rgba(21,101,192,0.08);
 }
+#dateNavCityControls {
+    display: contents;
+}
+#bottomMonthBar {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+}
+.bm-year-btn {
+    padding: 6px 11px;
+    background: #eef3fa;
+    color: #1565c0;
+    border: 1px solid #c5d8f5;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 14px;
+    transition: all 0.2s;
+}
+.bm-year-btn:hover {
+    background: #1565c0;
+    color: #fff;
+    border-color: #1565c0;
+}
+#bottomMonthYear {
+    min-width: 62px;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 800;
+    color: #1f4f82;
+}
+#bottomMonthSegments {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(38px, 1fr));
+    gap: 4px;
+    flex: 1;
+}
+.bm-seg-btn {
+    border: 1px solid #c8dcf3;
+    background: #f6faff;
+    color: #4a6a8a;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    height: 28px;
+    cursor: pointer;
+}
+.bm-seg-btn.active {
+    background: linear-gradient(180deg, #1f70d8 0%, #1565c0 100%);
+    border-color: #0f56aa;
+    color: #fff;
+    box-shadow: 0 0 0 2px rgba(21,101,192,0.22), 0 2px 8px rgba(21,101,192,0.28);
+}
 #analysisModeBar {
     display: none;
     align-items: center;
@@ -561,28 +616,6 @@ def build_css() -> str:
     grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
     gap: 12px;
 }
-#aiScopeSwitch {
-    display: inline-flex;
-    gap: 6px;
-    background: #f2f7ff;
-    border: 1px solid #d2e3f8;
-    border-radius: 999px;
-    padding: 3px;
-}
-.ai-scope-btn {
-    border: none;
-    background: transparent;
-    color: #3b6593;
-    border-radius: 999px;
-    padding: 6px 10px;
-    font-size: 12px;
-    font-weight: 700;
-    cursor: pointer;
-}
-.ai-scope-btn.active {
-    background: #1565c0;
-    color: #fff;
-}
 .ai-block {
     background: linear-gradient(180deg, #fbfdff 0%, #f4f8ff 100%);
     border: 1px solid #dce9f8;
@@ -721,6 +754,30 @@ def build_css() -> str:
     font-size: 12px;
     color: #6b8cba;
 }
+#monthHeatmapLoadWrap {
+    margin-top: 8px;
+    display: none;
+    align-items: center;
+    gap: 8px;
+}
+#monthHeatmapLoadText {
+    font-size: 12px;
+    color: #5d7fa7;
+    min-width: 148px;
+}
+#monthHeatmapLoadBar {
+    flex: 1;
+    height: 6px;
+    background: #e8f0fb;
+    border-radius: 999px;
+    overflow: hidden;
+}
+#monthHeatmapLoadBarInner {
+    width: 0%;
+    height: 100%;
+    background: linear-gradient(90deg, #4c8ed6 0%, #1565c0 100%);
+    transition: width 0.25s ease;
+}
 """
 
 
@@ -759,14 +816,22 @@ def build_dom(all_dates: list[str], current_index: int) -> str:
     </div>
 
     <div id="dateNavBar">
-        <button id="btn-prev-7">&laquo;</button>
-        <button id="btn-prev-1">&lsaquo;</button>
-        <span class="nav-date-label">{first_label}</span>
-        <input type="range" id="bottomSlider" min="0" max="{len(all_dates)-1}" value="{current_index}" step="1">
-        <span class="nav-date-label">{last_label}</span>
-        <button id="btn-next-1">&rsaquo;</button>
-        <button id="btn-next-7">&raquo;</button>
-        <span id="bottomCurrentDate">{cur_label}</span>
+        <div id="dateNavCityControls">
+            <button id="btn-prev-7">&laquo;</button>
+            <button id="btn-prev-1">&lsaquo;</button>
+            <span class="nav-date-label">{first_label}</span>
+            <input type="range" id="bottomSlider" min="0" max="{len(all_dates)-1}" value="{current_index}" step="1">
+            <span class="nav-date-label">{last_label}</span>
+            <button id="btn-next-1">&rsaquo;</button>
+            <button id="btn-next-7">&raquo;</button>
+            <span id="bottomCurrentDate">{cur_label}</span>
+        </div>
+        <div id="bottomMonthBar">
+            <button class="bm-year-btn" id="bm-year-prev" title="上一年">&laquo;</button>
+            <span id="bottomMonthYear">----</span>
+            <button class="bm-year-btn" id="bm-year-next" title="下一年">&raquo;</button>
+            <div id="bottomMonthSegments"></div>
+        </div>
     </div>
 
     <div id="analysisModeBar">
@@ -812,10 +877,6 @@ def build_dom(all_dates: list[str], current_index: int) -> str:
                 <div id="aiInsightSub">{ui_texts.get("ai.subtitle")}</div>
             </div>
             <div style="display:flex;gap:8px;align-items:center;">
-                <div id="aiScopeSwitch">
-                    <button id="aiScopeSettlementBtn" type="button" class="ai-scope-btn active" data-scope="settlement">聚落分析</button>
-                    <button id="aiScopeCityBtn" type="button" class="ai-scope-btn" data-scope="city">城市分析</button>
-                </div>
                 <button id="aiConfigBtn" type="button">AI服务设置</button>
                 <button id="aiGenerateBtn" type="button">{ui_texts.get("ai.btn")}</button>
             </div>
@@ -848,6 +909,10 @@ def build_dom(all_dates: list[str], current_index: int) -> str:
         </div>
         <div id="monthHeatmapChart"></div>
         <div id="monthHeatmapHint">显示当前城市在选定月份内按日强度分布；颜色标准随当前污染物切换。</div>
+        <div id="monthHeatmapLoadWrap">
+            <div id="monthHeatmapLoadText">正在加载年度数据…</div>
+            <div id="monthHeatmapLoadBar"><div id="monthHeatmapLoadBarInner"></div></div>
+        </div>
     </div>
 
     <div class="ai-config-backdrop" id="aiConfigBackdrop"></div>
@@ -933,7 +998,10 @@ let monthHeatmapChart = null;
 let selectedHeatmapMonth = '';
 const HEATMAP_SERVICE_BASE = 'http://127.0.0.1:8791';
 const HEATMAP_MONTH_CACHE = new Map();
+const HEATMAP_YEAR_PRELOAD = new Map();
 let aiAnalysisScope = 'settlement';
+let latestMonthHeatmapData = null;
+let bottomMonthYear = null;
 
 function pollutantLevel(metric, value) {
     if (value == null || Number.isNaN(Number(value))) return -1;
@@ -952,7 +1020,7 @@ function pollutantLevelText(level) {
     return ['优', '良', '轻度污染', '中度污染', '重度污染', '严重污染'][level] || '无数据';
 }
 
-function getMetricLegendPieces(metric) {
+function getHeatmapLegendPieces(metric) {
     const colors = HEATMAP_BLUE_LEVELS.slice();
     if (metric === 'AQI') {
         return [
@@ -982,6 +1050,11 @@ function fmtYm(dateStr) {
     return s.slice(0, 4) + '-' + s.slice(4, 6);
 }
 
+function dateHasMapData(dateStr) {
+    const day = (typeof CITY_DATA_BY_DATE !== 'undefined' && CITY_DATA_BY_DATE) ? CITY_DATA_BY_DATE[dateStr] : null;
+    return !!(day && Object.keys(day).length);
+}
+
 function getAvailableMonths() {
     const set = new Set();
     (ALL_DATES || []).forEach(d => {
@@ -1000,6 +1073,93 @@ function ensureHeatmapMonthPicker() {
     }
     sel.innerHTML = months.map(m => `<option value="${m}">${m}</option>`).join('');
     sel.value = selectedHeatmapMonth;
+    if (typeof window.syncTopMonthBar === 'function' && selectedHeatmapMonth) {
+        window.syncTopMonthBar(selectedHeatmapMonth);
+    }
+    if (selectedHeatmapMonth) {
+        syncBottomMonthBar(selectedHeatmapMonth);
+    }
+}
+
+function setMonthHeatmapLoadState(visible, progress, text) {
+    const wrap = document.getElementById('monthHeatmapLoadWrap');
+    const bar = document.getElementById('monthHeatmapLoadBarInner');
+    const txt = document.getElementById('monthHeatmapLoadText');
+    if (wrap) wrap.style.display = visible ? 'flex' : 'none';
+    if (bar && Number.isFinite(progress)) {
+        bar.style.width = Math.max(0, Math.min(100, Number(progress))) + '%';
+    }
+    if (txt && text) txt.textContent = text;
+}
+
+function syncBottomMonthButtons() {
+    const yearEl = document.getElementById('bottomMonthYear');
+    const segWrap = document.getElementById('bottomMonthSegments');
+    if (!yearEl || !segWrap || !bottomMonthYear) return;
+    yearEl.textContent = String(bottomMonthYear);
+    const activeMonth = selectedHeatmapMonth && selectedHeatmapMonth.startsWith(String(bottomMonthYear) + '-')
+        ? Number(selectedHeatmapMonth.slice(5, 7))
+        : null;
+    segWrap.innerHTML = Array.from({ length: 12 }, (_, i) => {
+        const mm = i + 1;
+        const cls = activeMonth === mm ? 'bm-seg-btn active' : 'bm-seg-btn';
+        return `<button type="button" class="${cls}" data-month="${String(mm).padStart(2, '0')}">${mm}月</button>`;
+    }).join('');
+    segWrap.querySelectorAll('.bm-seg-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const ym = `${bottomMonthYear}-${btn.dataset.month}`;
+            setHeatmapMonth(ym, { source: 'bottom' });
+        });
+    });
+}
+
+function syncBottomMonthBar(monthYm) {
+    if (!monthYm || monthYm.length !== 7) return;
+    bottomMonthYear = Number(monthYm.slice(0, 4));
+    if (!Number.isFinite(bottomMonthYear)) return;
+    syncBottomMonthButtons();
+}
+
+function setCurrentDateToMonthEnd(monthYm) {
+    if (!monthYm || typeof ALL_DATES === 'undefined' || !Array.isArray(ALL_DATES)) return;
+    let idx = -1;
+    const targetYmNum = Number(String(monthYm).replace('-', ''));
+    for (let i = ALL_DATES.length - 1; i >= 0; i--) {
+        const d = ALL_DATES[i];
+        if (fmtYm(d) === monthYm && dateHasMapData(d)) {
+            idx = i;
+            break;
+        }
+    }
+    if (idx < 0 && Number.isFinite(targetYmNum)) {
+        for (let i = ALL_DATES.length - 1; i >= 0; i--) {
+            const ymNum = Number(String(ALL_DATES[i] || '').slice(0, 6));
+            if (Number.isFinite(ymNum) && ymNum <= targetYmNum && dateHasMapData(ALL_DATES[i])) {
+                idx = i;
+                break;
+            }
+        }
+    }
+    if (idx < 0) {
+        for (let i = ALL_DATES.length - 1; i >= 0; i--) {
+            if (dateHasMapData(ALL_DATES[i])) {
+                idx = i;
+                break;
+            }
+        }
+    }
+    if (idx < 0) idx = ALL_DATES.length - 1;
+    if (idx >= 0) {
+        if (idx === currentDateIndex) return;
+        currentDateIndex = idx;
+        if (typeof onDateChange === 'function') {
+            window.__suppressCityPanelUpdateOnce = detailViewMode === 'heatmap';
+            onDateChange(true);
+        } else if (typeof renderMapByState === 'function') {
+            renderMapByState();
+            if (typeof syncMapSubtitle === 'function') syncMapSubtitle();
+        }
+    }
 }
 
 function metricToHourlyType(metric) {
@@ -1038,6 +1198,47 @@ async function fetchMonthlyHourlyHeatmap(cityName, monthYm, metric) {
     return data;
 }
 
+async function ensureHeatmapYearLoaded(cityName, year, metric) {
+    const hourlyMetric = metricToHourlyType(metric);
+    const yearKey = `${cityName}::${year}::${hourlyMetric}`;
+    if (HEATMAP_YEAR_PRELOAD.get(yearKey) === true) return;
+    const months = Array.from({ length: 12 }, (_, i) => `${year}-${String(i + 1).padStart(2, '0')}`);
+    let done = 0;
+    setMonthHeatmapLoadState(true, 2, `正在加载 ${year} 年数据…`);
+    for (const ym of months) {
+        try {
+            await fetchMonthlyHourlyHeatmap(cityName, ym, metric);
+        } catch (err) {
+        }
+        done += 1;
+        const pct = Math.round((done / months.length) * 100);
+        setMonthHeatmapLoadState(true, pct, `正在加载 ${year} 年数据（${done}/12）…`);
+    }
+    HEATMAP_YEAR_PRELOAD.set(yearKey, true);
+    setMonthHeatmapLoadState(false, 100, `已加载 ${year} 年数据`);
+}
+
+function setHeatmapMonth(monthYm, options) {
+    if (!monthYm) return;
+    selectedHeatmapMonth = monthYm;
+    const sel = document.getElementById('monthPicker');
+    if (sel && sel.value !== monthYm) sel.value = monthYm;
+    if (!options || options.source !== 'top') {
+        if (typeof window.syncTopMonthBar === 'function') window.syncTopMonthBar(monthYm);
+    }
+    syncBottomMonthBar(monthYm);
+    setCurrentDateToMonthEnd(monthYm);
+    selectedHeatmapMonth = fmtYm(ALL_DATES[currentDateIndex] || monthYm);
+    if (typeof window.syncTopMonthBar === 'function') window.syncTopMonthBar(selectedHeatmapMonth);
+    syncBottomMonthBar(selectedHeatmapMonth);
+    if (sel && sel.value !== selectedHeatmapMonth) sel.value = selectedHeatmapMonth;
+    if (detailViewMode === 'heatmap') {
+        latestMonthHeatmapData = null;
+        refreshAIInsightPanel();
+        renderMonthHeatmap();
+    }
+}
+
 async function renderMonthHeatmap() {
     const chartDom = document.getElementById('monthHeatmapChart');
     const titleEl = document.getElementById('monthHeatmapTitle');
@@ -1053,16 +1254,22 @@ async function renderMonthHeatmap() {
     }
     ensureHeatmapMonthPicker();
     const monthYm = selectedHeatmapMonth;
+    const yearStr = String(monthYm || '').slice(0, 4);
     const metric = selectedMetric || 'AQI';
     const hourlyMetric = metricToHourlyType(metric);
-    const pieces = getMetricLegendPieces(metric);
+    const pieces = getHeatmapLegendPieces(metric);
     const metricName = metric === 'AQI' ? 'AQI' : pollutantDisplayName(metric) + ' (ug/m3)';
     if (titleEl) titleEl.textContent = `${currentCityName} · ${monthYm} · ${metricName} 小时热力图`;
     if (hintEl) hintEl.textContent = '正在加载小时数据...';
+    if (yearStr.length === 4) {
+        await ensureHeatmapYearLoaded(currentCityName, yearStr, metric);
+    }
     let serviceData;
     try {
         serviceData = await fetchMonthlyHourlyHeatmap(currentCityName, monthYm, metric);
+        latestMonthHeatmapData = serviceData;
     } catch (err) {
+        latestMonthHeatmapData = null;
         monthHeatmapChart.clear();
         if (hintEl) hintEl.textContent = `热力图服务不可用：${err?.message || err}。请先运行主程序。`;
         return;
@@ -1148,8 +1355,14 @@ async function renderMonthHeatmap() {
         series: [{
             type: 'heatmap',
             data: heatRows,
+            itemStyle: {
+                borderColor: 'rgba(255,255,255,0.65)',
+                borderWidth: 0.5
+            },
             emphasis: {
                 itemStyle: {
+                    borderColor: '#1b5fb7',
+                    borderWidth: 2,
                     shadowBlur: 8,
                     shadowColor: 'rgba(21,101,192,0.25)'
                 }
@@ -1185,25 +1398,62 @@ async function renderMonthHeatmap() {
 }
 
 function applyDetailViewMode(mode) {
+    const prevMode = detailViewMode;
     detailViewMode = mode === 'heatmap' ? 'heatmap' : 'city';
+    aiAnalysisScope = detailViewMode === 'heatmap' ? 'heatmap' : 'settlement';
+    updateAIInsightHeaderByScope();
+    if (typeof window.setTopTimelineMode === 'function') {
+        window.setTopTimelineMode(detailViewMode);
+    }
+    if (typeof window.syncTopMonthBar === 'function' && detailViewMode === 'heatmap' && selectedHeatmapMonth) {
+        window.syncTopMonthBar(selectedHeatmapMonth);
+    }
     const modeBar = document.getElementById('analysisModeBar');
+    const dateNav = document.getElementById('dateNavBar');
+    const dateNavCity = document.getElementById('dateNavCityControls');
+    const bottomMonthBar = document.getElementById('bottomMonthBar');
     const infoBody = document.getElementById('infoBody');
     const aiSection = document.getElementById('aiInsightSection');
     const hmSection = document.getElementById('monthHeatmapSection');
+    const infoSection = document.getElementById('infoSection');
     if (modeBar) modeBar.style.display = currentCityName ? 'flex' : 'none';
     document.querySelectorAll('.analysis-mode-btn').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.mode === detailViewMode);
     });
     if (detailViewMode === 'heatmap') {
+        if (prevMode !== 'heatmap') {
+            selectedHeatmapMonth = fmtYm(ALL_DATES[currentDateIndex]);
+        }
+        if (dateNav) dateNav.style.display = 'flex';
+        if (dateNavCity) dateNavCity.style.display = 'none';
+        if (bottomMonthBar) bottomMonthBar.style.display = 'flex';
         if (infoBody) infoBody.style.display = 'none';
-        if (aiSection) aiSection.style.display = 'none';
+        if (aiSection) aiSection.style.display = currentCityName ? 'block' : 'none';
         if (hmSection) hmSection.style.display = currentCityName ? 'block' : 'none';
+        if (infoSection && hmSection && aiSection && aiSection.parentNode === infoSection) {
+            infoSection.insertBefore(hmSection, aiSection);
+        }
+        setCurrentDateToMonthEnd(selectedHeatmapMonth);
+        syncBottomMonthBar(selectedHeatmapMonth);
         renderMonthHeatmap();
     } else {
+        if (dateNav) dateNav.style.display = 'flex';
+        if (dateNavCity) dateNavCity.style.display = 'contents';
+        if (bottomMonthBar) bottomMonthBar.style.display = 'none';
         if (hmSection) hmSection.style.display = 'none';
         if (infoBody) infoBody.style.display = currentCityName ? 'flex' : 'none';
         if (aiSection) aiSection.style.display = currentCityName ? 'block' : 'none';
+        if (infoSection && infoBody && aiSection && aiSection.parentNode === infoSection) {
+            infoSection.insertBefore(aiSection, hmSection || null);
+        }
+        if (typeof renderMapByState === 'function') {
+            renderMapByState(true);
+        }
+        if (typeof syncMapSubtitle === 'function') {
+            syncMapSubtitle();
+        }
     }
+    refreshAIInsightPanel();
 }
 
 function renderPollutantLegend() {
@@ -1724,22 +1974,13 @@ function updateAIInsightHeaderByScope() {
     const blockC = document.getElementById('aiBlockTitleC');
     if (title) title.textContent = 'AI 深度分析';
     if (sub) {
-        sub.textContent = aiAnalysisScope === 'city'
-            ? '城市趋势、风险与成因解读（仅供参考）'
+        sub.textContent = aiAnalysisScope === 'heatmap'
+            ? '月历热力分布、时段风险与成因解读（仅供参考）'
             : '聚落结构、污染扩散与成因解读（仅供参考）';
     }
-    if (blockA) blockA.textContent = aiAnalysisScope === 'city' ? '城市趋势解读' : '聚落解读';
-    if (blockB) blockB.textContent = aiAnalysisScope === 'city' ? '短期风险分析' : '扩散分析';
+    if (blockA) blockA.textContent = aiAnalysisScope === 'heatmap' ? '月度热力解读' : '聚落解读';
+    if (blockB) blockB.textContent = aiAnalysisScope === 'heatmap' ? '时段风险分析' : '扩散分析';
     if (blockC) blockC.textContent = '成因推断';
-    document.querySelectorAll('.ai-scope-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.scope === aiAnalysisScope);
-    });
-}
-
-function setAIInsightScope(scope) {
-    aiAnalysisScope = scope === 'city' ? 'city' : 'settlement';
-    updateAIInsightHeaderByScope();
-    refreshAIInsightPanel();
 }
 
 function getCurrentAIContextKey(payload) {
@@ -1753,15 +1994,29 @@ function getCurrentAIContextKey(payload) {
     return [aiAnalysisScope, city, date, metric, radius].join('::');
 }
 
-function storeAIInsightInCache(cacheKey, insightData) {
+function getCurrentAISoftKey(payload) {
+    const snap = payload?.snapshot || {};
+    const city = snap.city || currentCityName || '';
+    const metric = snap.metric || selectedMetric || 'AQI';
+    if (aiAnalysisScope === 'heatmap') {
+        const hm = payload?.city_context?.heatmap_month || selectedHeatmapMonth || fmtYm(ALL_DATES[currentDateIndex] || '');
+        return [aiAnalysisScope, city, metric, hm].join('::');
+    }
+    return [aiAnalysisScope, city, metric].join('::');
+}
+
+function storeAIInsightInCache(cacheKey, insightData, payload) {
     if (!cacheKey || !insightData) return;
-    AI_INSIGHT_CACHE.set(cacheKey, {
+    const cacheObj = {
         settlement_text: insightData.settlement_text || '--',
         diffusion_text: insightData.diffusion_text || '--',
         cause_text: insightData.cause_text || '--',
         citations: Array.isArray(insightData.citations) ? insightData.citations : [],
         status_text: insightData.status_text || t('ai.empty')
-    });
+    };
+    AI_INSIGHT_CACHE.set(cacheKey, cacheObj);
+    const softKey = getCurrentAISoftKey(payload || buildAIAnalysisPayload());
+    if (softKey) AI_INSIGHT_CACHE.set(softKey, cacheObj);
 }
 
 function renderAICitations(citations) {
@@ -1803,8 +2058,9 @@ function renderAIInsight(insightData, statusText) {
 function restoreAIInsightFromCache(payload) {
     const contextPayload = payload || buildAIAnalysisPayload();
     const key = getCurrentAIContextKey(contextPayload);
-    if (!AI_INSIGHT_CACHE.has(key)) return false;
-    const cached = AI_INSIGHT_CACHE.get(key);
+    const softKey = getCurrentAISoftKey(contextPayload);
+    const cached = AI_INSIGHT_CACHE.get(key) || AI_INSIGHT_CACHE.get(softKey);
+    if (!cached) return false;
     renderAIInsight(cached, cached.status_text || t('ai.empty'));
     return true;
 }
@@ -1901,22 +2157,47 @@ function buildAIAnalysisPayload() {
         : null;
     const dateStr = ALL_DATES[currentDateIndex];
     const fallbackAQI = CITY_DATA_BY_DATE[dateStr]?.[currentCityName] ?? null;
+    const heatRows = (latestMonthHeatmapData && Array.isArray(latestMonthHeatmapData.data))
+        ? latestMonthHeatmapData.data.map(r => [String(r[0] || ''), Number(r[1]), Number(r[2])]).filter(r => Number.isFinite(r[1]) && Number.isFinite(r[2]))
+        : [];
+    const hourBuckets = Array.from({ length: 24 }, () => []);
+    heatRows.forEach(r => {
+        const h = r[1];
+        if (h >= 0 && h <= 23) hourBuckets[h].push(r[2]);
+    });
+    const hourAvg = hourBuckets.map((arr, h) => ({
+        hour: h,
+        avg: arr.length ? (arr.reduce((a, b) => a + b, 0) / arr.length) : null
+    }));
+    const topHours = hourAvg
+        .filter(x => x.avg != null)
+        .sort((a, b) => b.avg - a.avg)
+        .slice(0, 3)
+        .map(x => x.hour);
+    const isHeatmapScope = aiAnalysisScope === 'heatmap';
+
     return {
         snapshot: {
             city: currentCityName,
             date: dateStr,
             metric: selectedMetric,
             radiusKm: typeof settlementRadiusKm === 'number' ? settlementRadiusKm : 120,
-            in_count: snapshotBase?.in_count ?? null,
-            in_avg: snapshotBase?.in_avg ?? fallbackAQI,
-            out_avg: snapshotBase?.out_avg ?? null,
-            delta_day: snapshotBase?.delta_day ?? null,
-            slope_7d: snapshotBase?.slope_7d ?? null,
-            diffusion_label: snapshotBase?.diffusion_label ?? null,
-            diffusion_detail: snapshotBase?.diffusion_detail ?? null
+            in_count: isHeatmapScope ? null : (snapshotBase?.in_count ?? null),
+            in_avg: isHeatmapScope ? null : (snapshotBase?.in_avg ?? fallbackAQI),
+            out_avg: isHeatmapScope ? null : (snapshotBase?.out_avg ?? null),
+            delta_day: isHeatmapScope ? null : (snapshotBase?.delta_day ?? null),
+            slope_7d: isHeatmapScope ? null : (snapshotBase?.slope_7d ?? null),
+            diffusion_label: isHeatmapScope ? null : (snapshotBase?.diffusion_label ?? null),
+            diffusion_detail: isHeatmapScope ? null : (snapshotBase?.diffusion_detail ?? null)
         },
         history: snapshotBase?.history || [],
-        city_context: buildCityContextData(dateStr)
+        city_context: {
+            ...buildCityContextData(dateStr),
+            heatmap_month: selectedHeatmapMonth || fmtYm(dateStr),
+            heatmap_coverage: latestMonthHeatmapData?.coverage || null,
+            heatmap_rows: heatRows.slice(0, 3000),
+            heatmap_top_hours: topHours
+        }
     };
 }
 
@@ -1929,17 +2210,21 @@ function renderLocalFallbackInsight(payload, reasonText) {
     const slope = snap.slope_7d != null ? ((snap.slope_7d >= 0 ? '+' : '') + Number(snap.slope_7d).toFixed(2)) : '--';
 
     const cityCtx = payload.city_context || {};
-    const isCity = aiAnalysisScope === 'city';
+    const isHeatmap = aiAnalysisScope === 'heatmap';
+    const isSettlement = !isHeatmap;
+    const cov = cityCtx.heatmap_coverage || {};
+    const covPct = Number.isFinite(cov.ratio) ? (Number(cov.ratio) * 100).toFixed(1) + '%' : '--';
+    const topHours = Array.isArray(cityCtx.heatmap_top_hours) ? cityCtx.heatmap_top_hours : [];
     const insightData = {
-        settlement_text: isCity
-            ? `${snap.city || currentCityName} 在 ${snap.date || ALL_DATES[currentDateIndex]} 的 ${metric} 当前值 ${cityCtx.current ?? '--'}，较昨日 ${delta}，7日斜率 ${slope}/天。`
-            : `${snap.city || currentCityName} 在 ${snap.date || ALL_DATES[currentDateIndex]} 的 ${metric} 聚落结构：内圈均值 ${inAvg}，外圈均值 ${outAvg}，较昨日 ${delta}，7日斜率 ${slope}/天。`,
-        diffusion_text: isCity
-            ? `短期风险：全国相对分位约 ${cityCtx.national_percentile != null ? Number(cityCtx.national_percentile).toFixed(1) + '%' : '--'}，风险等级 ${cityCtx.risk_level || '--'}。`
-            : `扩散判断：${snap.diffusion_label || '待判定'}。${snap.diffusion_detail || '当前样本有限，建议结合风场数据继续验证。'}`,
-        cause_text: isCity
-            ? ['1) 先看气象条件是否不利扩散；', '2) 再看本地排放活动是否上行；', '3) 关注地理地形对扩散效率的限制；', '4) 最后结合经济与产业强度评估长期影响。'].join('\\n')
-            : ['1) 可能受区域传输与局地排放变化共同影响；', '2) 建议联动风速风向、湿度和降水复核；', '3) 关注跨城传输路径；', '4) 结合经济与产业强度评估长期影响。'].join('\\n'),
+        settlement_text: isSettlement
+            ? `${snap.city || currentCityName} 在 ${snap.date || ALL_DATES[currentDateIndex]} 的 ${metric} 聚落结构：内圈均值 ${inAvg}，外圈均值 ${outAvg}，较昨日 ${delta}，7日斜率 ${slope}/天。`
+            : `${snap.city || currentCityName} 在 ${cityCtx.heatmap_month || '--'} 的 ${metric} 月历热力覆盖率 ${covPct}，高值时段主要集中在 ${topHours.length ? topHours.join('、') + ' 时' : '待识别'}。`,
+        diffusion_text: isSettlement
+            ? `扩散判断：${snap.diffusion_label || '待判定'}。${snap.diffusion_detail || '当前样本有限，建议结合风场数据继续验证。'}`
+            : `时段风险：${covPct === '--' ? '数据不足' : (Number(String(covPct).replace('%', '')) < 80 ? '本月缺失较多，解读需谨慎。' : '可基于小时分布判断高风险时段。')}`,
+        cause_text: isSettlement
+            ? ['1) 可能受区域传输与局地排放变化共同影响；', '2) 建议联动风速风向、湿度和降水复核；', '3) 关注跨城传输路径；', '4) 结合经济与产业强度评估长期影响。'].join('\\n')
+            : ['1) 先看本月高值时段是否与静稳天气重叠；', '2) 再看这些时段的本地排放活动是否同步增强；', '3) 结合地理地形判断污染物是否更易滞留；', '4) 最后再从经济与产业运行强度解释长期背景。'].join('\\n'),
         citations: [
             {
                 id: 'S1',
@@ -1960,7 +2245,7 @@ function renderLocalFallbackInsight(payload, reasonText) {
     };
 
     renderAIInsight(insightData, insightData.status_text);
-    storeAIInsightInCache(getCurrentAIContextKey(payload), insightData);
+    storeAIInsightInCache(getCurrentAIContextKey(payload), insightData, payload);
 }
 
 async function generateAIInsight() {
@@ -1998,7 +2283,7 @@ async function generateAIInsight() {
         const headers = { 'Content-Type': 'application/json' };
         if (aiRuntimeConfig.apiKey) headers['X-API-Key'] = aiRuntimeConfig.apiKey;
         const base = (AI_ANALYSIS_API_BASE || 'http://127.0.0.1:8787').replace(/\\/$/, '');
-        const endpoint = aiAnalysisScope === 'city' ? '/api/analysis/city' : '/api/analysis/settlement';
+        const endpoint = aiAnalysisScope === 'heatmap' ? '/api/analysis/heatmap-month' : '/api/analysis/settlement';
         const resp = await fetchWithTimeout(base + endpoint, {
             method: 'POST',
             headers: headers,
@@ -2021,7 +2306,7 @@ async function generateAIInsight() {
 
         renderAIInsight(insightData, statusText);
         finishAIProgress(statusText);
-        storeAIInsightInCache(cacheKey, insightData);
+        storeAIInsightInCache(cacheKey, insightData, payload);
     } catch (err) {
         finishAIProgress(t('ai.err'));
         renderLocalFallbackInsight(payload, t('ai.err') + '（未连接分析服务）');
@@ -2037,7 +2322,7 @@ function openCityDetail(cityName) {
     document.getElementById('infoBody').style.display = 'flex';
     document.getElementById('filterBar').style.display = 'flex';
     document.getElementById('analysisModeBar').style.display = 'flex';
-    document.getElementById('aiInsightSection').style.display = detailViewMode === 'city' ? 'block' : 'none';
+    document.getElementById('aiInsightSection').style.display = 'block';
     document.getElementById('compareBtn').style.display = 'inline-flex';
     setText('selectedCityBadge', cityName);
     setText('chartPanelTitle', cityName + ' - ' + t('city.trend7d'));
@@ -2084,7 +2369,7 @@ function updateCityPanel() {
         return;
     }
     document.getElementById('analysisModeBar').style.display = currentCityName ? 'flex' : 'none';
-    document.getElementById('aiInsightSection').style.display = (currentCityName && detailViewMode === 'city') ? 'block' : 'none';
+    document.getElementById('aiInsightSection').style.display = currentCityName ? 'block' : 'none';
     if (!currentCityName) return;
 
     const dateStr = ALL_DATES[currentDateIndex];
@@ -2261,6 +2546,9 @@ document.querySelectorAll('.analysis-mode-btn').forEach(btn => {
         applyDetailViewMode(this.dataset.mode);
         if (detailViewMode === 'city') {
             updateCityPanel();
+            if (typeof renderMapByState === 'function') {
+                renderMapByState(true);
+            }
         } else {
             renderMonthHeatmap();
         }
@@ -2268,15 +2556,23 @@ document.querySelectorAll('.analysis-mode-btn').forEach(btn => {
 });
 
 document.getElementById('monthPicker')?.addEventListener('change', function() {
-    selectedHeatmapMonth = this.value;
-    if (detailViewMode === 'heatmap') renderMonthHeatmap();
+    setHeatmapMonth(this.value, { source: 'picker' });
+});
+
+document.getElementById('bm-year-prev')?.addEventListener('click', function() {
+    if (!bottomMonthYear) return;
+    bottomMonthYear -= 1;
+    syncBottomMonthButtons();
+});
+
+document.getElementById('bm-year-next')?.addEventListener('click', function() {
+    if (!bottomMonthYear) return;
+    bottomMonthYear += 1;
+    syncBottomMonthButtons();
 });
 
 document.getElementById('aiGenerateBtn')?.addEventListener('click', () => {
     generateAIInsight();
-});
-document.querySelectorAll('.ai-scope-btn').forEach(btn => {
-    btn.addEventListener('click', () => setAIInsightScope(btn.dataset.scope));
 });
 
 document.getElementById('aiConfigBtn')?.addEventListener('click', () => {
@@ -2307,6 +2603,10 @@ loadAIRuntimeConfig();
 applyAIBaseUrl();
 syncAIConfigFormFromState();
 updateAIInsightHeaderByScope();
+window.onTopHeatmapMonthChange = function(monthYm) {
+    if (!monthYm) return;
+    setHeatmapMonth(monthYm, { source: 'top' });
+};
 onAppRunModeChanged(aiRunMode);
 if (localStorage.getItem('APP_AI_NEED_SETUP') === '1') {
     setTimeout(() => openAIConfigDrawer(), 80);

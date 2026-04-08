@@ -771,9 +771,6 @@ function getSettlementLevelColors() {
 }
 
 function getSettlementLegendPieces(metric) {
-    if (typeof getMetricLegendPieces === 'function') {
-        return getMetricLegendPieces(metric);
-    }
     const colors = getSettlementLevelColors();
     if (metric === 'AQI') {
         return [

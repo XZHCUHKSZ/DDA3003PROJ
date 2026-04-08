@@ -272,6 +272,64 @@ body {
     max-width: 88vw;
     pointer-events: all;
 }
+#topMonthBar {
+    position: absolute;
+    top: 82px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 401;
+    background: rgba(255,255,255,0.93);
+    backdrop-filter: blur(12px);
+    border-radius: 14px;
+    box-shadow: 0 4px 18px rgba(21,101,192,0.13);
+    border: 1px solid rgba(21,101,192,0.12);
+    padding: 8px 12px;
+    display: none;
+    align-items: center;
+    gap: 8px;
+    min-width: 760px;
+    max-width: 92vw;
+}
+.tm-year-btn {
+    padding: 4px 9px;
+    background: #e3eaf6;
+    color: #1565c0;
+    border: none;
+    border-radius: 7px;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 14px;
+}
+#topMonthYear {
+    min-width: 64px;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 800;
+    color: #1f4f82;
+}
+#topMonthSegments {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(36px, 1fr));
+    gap: 4px;
+    flex: 1;
+}
+.tm-seg-btn {
+    border: 1px solid #c8dcf3;
+    background: #f6faff;
+    color: #4a6a8a;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    height: 28px;
+    cursor: pointer;
+}
+.tm-seg-btn.active {
+    background: linear-gradient(180deg, #1f70d8 0%, #1565c0 100%);
+    border-color: #0f56aa;
+    color: #fff;
+    box-shadow: 0 0 0 2px rgba(21,101,192,0.22), 0 2px 8px rgba(21,101,192,0.28);
+}
 #topTimelineBar button {
     padding: 4px 10px;
     background: #e3eaf6;
@@ -334,6 +392,9 @@ body {
         min-width: 620px;
         max-width: 92vw;
     }
+    #topMonthBar {
+        min-width: 620px;
+    }
     #topSlider {
         min-width: 320px;
     }
@@ -347,6 +408,14 @@ body {
     }
     #topSlider {
         min-width: 180px;
+    }
+    #topMonthBar {
+        min-width: 0;
+        width: calc(100vw - 22px);
+        padding: 7px 8px;
+    }
+    #topMonthSegments {
+        grid-template-columns: repeat(6, minmax(36px, 1fr));
     }
 }
 
@@ -445,6 +514,13 @@ def build_dom(all_dates: list[str], current_index: int) -> str:
         <button id="tl-next-7" title="{next7}">&raquo;</button>
         <span id="topCurrentDate">{cur_label}</span>
     </div>
+
+    <div id="topMonthBar">
+        <button class="tm-year-btn" id="tm-year-prev" title="上一年">&laquo;</button>
+        <span id="topMonthYear">----</span>
+        <button class="tm-year-btn" id="tm-year-next" title="下一年">&raquo;</button>
+        <div id="topMonthSegments"></div>
+    </div>
 </div>
 
 <div id="scrollHint" onclick="document.getElementById('infoSection').scrollIntoView({{behavior:'smooth'}})">
@@ -492,6 +568,9 @@ function syncMapSubtitle() {
 let bootOverlayDone = false;
 let bootReadyToEnter = false;
 let appRunMode = '';
+let topTimelineMode = 'city';
+let topMonthYear = null;
+let topMonthValue = '';
 
 function syncBootModeUI() {
     const offlineBtn = byId('bootModeOffline');
@@ -587,9 +666,83 @@ function syncAllTimelines() {
     if (byId('bottomCurrentDate')) byId('bottomCurrentDate').textContent = label;
 }
 
+function ymFromDateStr(d) {
+    if (!d || String(d).length !== 8) return '';
+    const s = String(d);
+    return s.substring(0, 4) + '-' + s.substring(4, 6);
+}
+
+function pickLatestDateIndexByMonth(monthYm) {
+    if (!monthYm) return -1;
+    for (let i = ALL_DATES.length - 1; i >= 0; i--) {
+        const d = ALL_DATES[i];
+        const day = (typeof CITY_DATA_BY_DATE !== 'undefined' && CITY_DATA_BY_DATE) ? CITY_DATA_BY_DATE[d] : null;
+        if (ymFromDateStr(d) === monthYm && day && Object.keys(day).length) return i;
+    }
+    return -1;
+}
+
+function syncTopMonthButtons() {
+    const yearEl = byId('topMonthYear');
+    const segWrap = byId('topMonthSegments');
+    if (!yearEl || !segWrap || !topMonthYear) return;
+    yearEl.textContent = String(topMonthYear);
+    const activeMonth = topMonthValue && topMonthValue.startsWith(String(topMonthYear) + '-') ? Number(topMonthValue.slice(5, 7)) : null;
+    segWrap.innerHTML = Array.from({ length: 12 }, (_, i) => {
+        const mm = i + 1;
+        const cls = activeMonth === mm ? 'tm-seg-btn active' : 'tm-seg-btn';
+        return `<button type="button" class="${cls}" data-month="${String(mm).padStart(2, '0')}">${mm}月</button>`;
+    }).join('');
+    segWrap.querySelectorAll('.tm-seg-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const mm = btn.dataset.month;
+            const ym = `${topMonthYear}-${mm}`;
+            topMonthValue = ym;
+            syncTopMonthButtons();
+            const idx = pickLatestDateIndexByMonth(ym);
+            if (idx >= 0) {
+                currentDateIndex = idx;
+                window.__suppressCityPanelUpdateOnce = true;
+                onDateChange(true);
+            }
+            if (typeof window.onTopHeatmapMonthChange === 'function') {
+                window.onTopHeatmapMonthChange(ym);
+            }
+        });
+    });
+}
+
+function syncTopMonthBar(monthYm) {
+    const candidate = monthYm || ymFromDateStr(ALL_DATES[currentDateIndex]);
+    if (!candidate || candidate.length !== 7) return;
+    topMonthValue = candidate;
+    topMonthYear = Number(candidate.slice(0, 4));
+    if (!Number.isFinite(topMonthYear)) return;
+    syncTopMonthButtons();
+}
+
+function setTopTimelineMode(mode) {
+    topTimelineMode = mode === 'heatmap' ? 'heatmap' : 'city';
+    const tl = byId('topTimelineBar');
+    const mb = byId('topMonthBar');
+    if (tl) tl.style.display = topTimelineMode === 'heatmap' ? 'none' : 'flex';
+    if (mb) mb.style.display = topTimelineMode === 'heatmap' ? 'flex' : 'none';
+    if (topTimelineMode === 'heatmap') {
+        syncTopMonthBar(topMonthValue || ymFromDateStr(ALL_DATES[currentDateIndex]));
+    }
+}
+
 function onDateChange(instant) {
     syncAllTimelines();
+    if (topTimelineMode === 'heatmap') {
+        syncTopMonthBar(ymFromDateStr(ALL_DATES[currentDateIndex]));
+    }
     renderMapByState();
+    const suppressCityPanelOnce = !!window.__suppressCityPanelUpdateOnce;
+    if (suppressCityPanelOnce) {
+        window.__suppressCityPanelUpdateOnce = false;
+        return;
+    }
     if (instant) {
         if (typeof updateCityPanel === 'function') updateCityPanel();
     } else {
@@ -599,6 +752,9 @@ function onDateChange(instant) {
         }, 250);
     }
 }
+
+window.setTopTimelineMode = setTopTimelineMode;
+window.syncTopMonthBar = syncTopMonthBar;
 
 function bindTimelineEvents() {
     byId('tl-prev-7')?.addEventListener('click', () => {
@@ -641,9 +797,21 @@ function bindTimelineEvents() {
         currentDateIndex = parseInt(this.value, 10);
         onDateChange(false);
     });
+    byId('tm-year-prev')?.addEventListener('click', () => {
+        if (!topMonthYear) return;
+        topMonthYear -= 1;
+        syncTopMonthButtons();
+    });
+    byId('tm-year-next')?.addEventListener('click', () => {
+        if (!topMonthYear) return;
+        topMonthYear += 1;
+        syncTopMonthButtons();
+    });
 }
 
 bindTimelineEvents();
+syncTopMonthBar(ymFromDateStr(ALL_DATES[currentDateIndex]));
+setTopTimelineMode('city');
 setBootStatus(t('loader.status.framework'), t('loader.sub.framework'));
 const bootHint = byId('bootHint');
 const bootEnter = byId('bootEnter');
