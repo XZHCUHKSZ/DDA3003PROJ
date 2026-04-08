@@ -881,10 +881,34 @@ function formatCauseBulletList(text) {
     }
 
     if (!orderedTexts.length) orderedTexts = [cleaned];
-    if (orderedTexts.length > 6) orderedTexts = orderedTexts.slice(0, 6);
+    if (orderedTexts.length > 8) orderedTexts = orderedTexts.slice(0, 8);
     orderedTexts = orderedTexts
         .map(s => s.replace(/^\\d+\\s*[\\.\\)、)]\\s*/, '').trim())
         .filter(s => s && !/^\\d+$/.test(s));
+
+    const normalizedItems = [];
+    for (const raw of orderedTexts) {
+        const item = String(raw || '').trim();
+        if (!item) continue;
+        const hasTitle = item.includes('：');
+        const startsWithConnector = /^(而|并且|且|同时|另外|此外|并|但|但是)/.test(item);
+
+        if (!hasTitle && startsWithConnector && normalizedItems.length === 0) {
+            continue;
+        }
+        if (!hasTitle && normalizedItems.length > 0) {
+            normalizedItems[normalizedItems.length - 1] += '；' + item;
+            continue;
+        }
+        normalizedItems.push(item);
+    }
+    if (normalizedItems.length) {
+        orderedTexts = normalizedItems;
+    }
+    const titled = orderedTexts.filter(s => s.includes('：'));
+    if (titled.length >= 2) {
+        orderedTexts = titled;
+    }
 
     const econLines = orderedTexts.filter(s => /经济|GDP|产业|工业|制造业/.test(s));
     const nonEconLines = orderedTexts.filter(s => !/经济|GDP|产业|工业|制造业/.test(s));
