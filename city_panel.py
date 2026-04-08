@@ -842,18 +842,30 @@ function formatCauseBulletList(text) {
 
     const normalized = cleaned.replace(/\\r/g, ' ').trim();
     const ordered = [];
-    const inlineRe = /(\\d+)\\s*[\\.\\)、)]\\s*([^\\n]+?)(?=(?:\\s+\\d+\\s*[\\.\\)、)]\\s*)|$)/g;
+    const inlineRe = /(?:^|[\\s\\n])(\\d{1,2})\\s*[\\.、\\)）]\\s*([\\s\\S]*?)(?=(?:[\\s\\n]+\\d{1,2}\\s*[\\.、\\)）]\\s*)|$)/g;
     let m;
     while ((m = inlineRe.exec(normalized)) !== null) {
         const piece = String(m[2] || '').trim();
         if (piece && !/^\\d+$/.test(piece)) ordered.push(piece);
     }
     if (!ordered.length) {
-        const lines = normalized
+        const rawLines = normalized
             .split('\\n')
             .map(s => s.trim())
-            .filter(Boolean)
-            .map(s => s.replace(/^\\d+\\s*[\\.\\)、)]\\s*/, '').trim())
+            .filter(Boolean);
+        const mergedLines = [];
+        for (let i = 0; i < rawLines.length; i++) {
+            const cur = rawLines[i];
+            if (/^\\d{1,2}$/.test(cur) && i + 1 < rawLines.length) {
+                const nxt = rawLines[i + 1];
+                mergedLines.push(`${cur}） ${nxt}`);
+                i += 1;
+                continue;
+            }
+            mergedLines.push(cur);
+        }
+        const lines = mergedLines
+            .map(s => s.replace(/^\\d+\\s*[\\.、\\)）]\\s*/, '').trim())
             .filter(s => s && !/^\\d+$/.test(s));
         if (lines.length >= 2) {
             ordered.push(...lines);
