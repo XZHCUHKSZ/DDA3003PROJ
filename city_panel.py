@@ -239,12 +239,26 @@ def build_css() -> str:
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     gap: 12px;
-    align-items: start;
+    align-items: stretch;
     min-height: 0;
     flex: 1;
 }
+#metricsCard {
+    background: #ffffff;
+    border: 1px solid #dde8f5;
+    border-radius: 14px;
+    box-shadow: 0 2px 12px rgba(21,101,192,0.06);
+    padding: 12px 14px 14px;
+    display: flex;
+    flex-direction: column;
+    min-height: 100%;
+}
+#metricsCard #chartPanelTitle {
+    margin-bottom: 8px;
+}
 #analysisTwinGrid #metricsChart {
-    min-height: 330px;
+    min-height: 360px;
+    flex: 1;
 }
 #settlementPanelHost {
     display: none;
@@ -256,6 +270,9 @@ def build_css() -> str:
 #analysisTwinGrid.settlement-visible #settlementPanelHost {
     display: block;
 }
+#analysisTwinGrid.settlement-visible #metricsCard {
+    min-height: 100%;
+}
 #analysisTwinGrid.settlement-visible #settlementPanel {
     margin-top: 0;
 }
@@ -263,6 +280,9 @@ def build_css() -> str:
     #analysisTwinGrid,
     #analysisTwinGrid.settlement-visible {
         grid-template-columns: minmax(0, 1fr);
+    }
+    #metricsCard {
+        min-height: auto;
     }
     #analysisTwinGrid.settlement-visible #settlementPanel {
         margin-top: 12px;
@@ -652,9 +672,11 @@ def build_dom(all_dates: list[str], current_index: int) -> str:
         </div>
 
         <div id="chartPanel">
-            <div id="chartPanelTitle">{trend_title}</div>
             <div id="analysisTwinGrid">
-                <div id="metricsChart"></div>
+                <div id="metricsCard">
+                    <div id="chartPanelTitle">{trend_title}</div>
+                    <div id="metricsChart"></div>
+                </div>
                 <div id="settlementPanelHost"></div>
             </div>
         </div>
