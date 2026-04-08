@@ -226,31 +226,6 @@ def build_css() -> str:
     line-height: 1;
     color: #1565c0;
 }
-#pollutantLegend {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-}
-.pollutant-legend-item {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 2px 7px;
-    border-radius: 999px;
-    border: 1px solid #e2ebf7;
-    background: #f8fbff;
-    color: #56789e;
-    font-size: 11px;
-    white-space: nowrap;
-}
-.pollutant-legend-dot {
-    width: 9px;
-    height: 9px;
-    border-radius: 50%;
-    border: 1px solid rgba(255,255,255,0.9);
-    box-shadow: 0 0 0 1px rgba(21,101,192,0.08);
-    flex-shrink: 0;
-}
 #healthAdvice {
     font-size: 13px;
     color: #4a6a8a;
@@ -345,6 +320,27 @@ def build_css() -> str:
     gap: 10px;
     flex-wrap: wrap;
     box-shadow: 0 2px 12px rgba(21,101,192,0.08);
+}
+#analysisModeBar {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 28px 0;
+}
+.analysis-mode-btn {
+    padding: 6px 14px;
+    border-radius: 999px;
+    border: 1px solid #c5d8f5;
+    background: #f4f8ff;
+    color: #3a5f8a;
+    font-size: 12px;
+    font-weight: 800;
+    cursor: pointer;
+}
+.analysis-mode-btn.active {
+    background: #1565c0;
+    border-color: #1565c0;
+    color: #fff;
 }
 #dateNavBar button {
     padding: 6px 13px;
@@ -649,6 +645,60 @@ def build_css() -> str:
 #aiSources a:hover {
     text-decoration: underline;
 }
+#monthHeatmapSection {
+    display: none;
+    margin: 10px 24px 28px;
+    background: #ffffff;
+    border: 1px solid #dde8f5;
+    border-radius: 14px;
+    box-shadow: 0 2px 12px rgba(21,101,192,0.06);
+    padding: 14px 16px 16px;
+}
+#monthHeatmapToolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+#monthHeatmapTitle {
+    font-size: 15px;
+    color: #1a2a4a;
+    font-weight: 800;
+}
+#monthHeatmapCtrl {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+#monthHeatmapCtrl label {
+    font-size: 12px;
+    color: #6b8cba;
+    font-weight: 700;
+}
+#monthPicker {
+    border: 1px solid #c5d8f5;
+    background: #f8fbff;
+    color: #2f5f93;
+    border-radius: 8px;
+    padding: 5px 8px;
+    font-size: 12px;
+    font-weight: 700;
+}
+#monthHeatmapChart {
+    width: 100%;
+    height: 700px;
+    border: 1px solid #eef3fa;
+    border-radius: 10px;
+    background: #fbfdff;
+}
+#monthHeatmapHint {
+    margin-top: 8px;
+    font-size: 12px;
+    color: #6b8cba;
+}
 """
 
 
@@ -697,6 +747,11 @@ def build_dom(all_dates: list[str], current_index: int) -> str:
         <span id="bottomCurrentDate">{cur_label}</span>
     </div>
 
+    <div id="analysisModeBar">
+        <button id="modeCityBtn" class="analysis-mode-btn active" data-mode="city">城市分析模式</button>
+        <button id="modeHeatmapBtn" class="analysis-mode-btn" data-mode="heatmap">月历热力模式</button>
+    </div>
+
     <div id="infoBody" style="display:none;">
         <div id="compareListPanel">
             <div id="compareEmptyHint">{compare_hint}</div>
@@ -707,7 +762,6 @@ def build_dom(all_dates: list[str], current_index: int) -> str:
                 <h3>{pollutants_title} (ug/m3)</h3>
                 <div class="pollutant-meta">
                     <div id="pollutantSortHint"><span class="pollutant-sort-arrow">↓</span>严重程度降序</div>
-                    <div id="pollutantLegend"></div>
                 </div>
                 <div class="pollutant-bar-list" id="pollutantBarList"></div>
             </div>
@@ -756,6 +810,18 @@ def build_dom(all_dates: list[str], current_index: int) -> str:
                 <div id="aiCauseText">--</div>
             </div>
         </div>
+    </div>
+
+    <div id="monthHeatmapSection">
+        <div id="monthHeatmapToolbar">
+            <div id="monthHeatmapTitle">月历热力图</div>
+            <div id="monthHeatmapCtrl">
+                <label for="monthPicker">月份</label>
+                <select id="monthPicker"></select>
+            </div>
+        </div>
+        <div id="monthHeatmapChart"></div>
+        <div id="monthHeatmapHint">显示当前城市在选定月份内按日强度分布；颜色标准随当前污染物切换。</div>
     </div>
 
     <div class="ai-config-backdrop" id="aiConfigBackdrop"></div>
@@ -835,6 +901,9 @@ const POLLUTANT_THRESHOLDS = {
     'O3_8h': [100, 160, 215, 265, 800],
     'O3_8h_24h': [100, 160, 215, 265, 800]
 };
+let detailViewMode = 'city';
+let monthHeatmapChart = null;
+let selectedHeatmapMonth = '';
 
 function pollutantLevel(metric, value) {
     if (value == null || Number.isNaN(Number(value))) return -1;
@@ -857,41 +926,164 @@ function getMetricLegendPieces(metric) {
     const colors = POLLUTANT_COLOR_LEVELS.slice();
     if (metric === 'AQI') {
         return [
-            { label: '优', range: '0-50', color: colors[0] },
-            { label: '良', range: '51-100', color: colors[1] },
-            { label: '轻度', range: '101-150', color: colors[2] },
-            { label: '中度', range: '151-200', color: colors[3] },
-            { label: '重度', range: '201-300', color: colors[4] },
-            { label: '严重', range: '>300', color: colors[5] }
+            { label: '优', min: 0, max: 50, range: '0-50', color: colors[0] },
+            { label: '良', min: 51, max: 100, range: '51-100', color: colors[1] },
+            { label: '轻度污染', min: 101, max: 150, range: '101-150', color: colors[2] },
+            { label: '中度污染', min: 151, max: 200, range: '151-200', color: colors[3] },
+            { label: '重度污染', min: 201, max: 300, range: '201-300', color: colors[4] },
+            { label: '严重污染', min: 301, max: 9999, range: '>300', color: colors[5] }
         ];
     }
     const th = POLLUTANT_THRESHOLDS[metric];
     if (!th || th.length < 5) return [];
     return [
-        { label: '优', range: `0-${th[0]}`, color: colors[0] },
-        { label: '良', range: `${th[0] + 1}-${th[1]}`, color: colors[1] },
-        { label: '轻度', range: `${th[1] + 1}-${th[2]}`, color: colors[2] },
-        { label: '中度', range: `${th[2] + 1}-${th[3]}`, color: colors[3] },
-        { label: '重度', range: `${th[3] + 1}-${th[4]}`, color: colors[4] },
-        { label: '严重', range: `>${th[4]}`, color: colors[5] }
+        { label: '优', min: 0, max: th[0], range: `0-${th[0]}`, color: colors[0] },
+        { label: '良', min: th[0] + 1, max: th[1], range: `${th[0] + 1}-${th[1]}`, color: colors[1] },
+        { label: '轻度污染', min: th[1] + 1, max: th[2], range: `${th[1] + 1}-${th[2]}`, color: colors[2] },
+        { label: '中度污染', min: th[2] + 1, max: th[3], range: `${th[2] + 1}-${th[3]}`, color: colors[3] },
+        { label: '重度污染', min: th[3] + 1, max: th[4], range: `${th[3] + 1}-${th[4]}`, color: colors[4] },
+        { label: '严重污染', min: th[4] + 1, max: 9999, range: `>${th[4]}`, color: colors[5] }
     ];
 }
 
+function fmtYm(dateStr) {
+    const s = String(dateStr || '');
+    if (s.length !== 8) return s;
+    return s.slice(0, 4) + '-' + s.slice(4, 6);
+}
+
+function getAvailableMonths() {
+    const set = new Set();
+    (ALL_DATES || []).forEach(d => {
+        const ym = fmtYm(d);
+        if (ym) set.add(ym);
+    });
+    return Array.from(set).sort();
+}
+
+function ensureHeatmapMonthPicker() {
+    const sel = document.getElementById('monthPicker');
+    if (!sel) return;
+    const months = getAvailableMonths();
+    if (!selectedHeatmapMonth || !months.includes(selectedHeatmapMonth)) {
+        selectedHeatmapMonth = months.length ? months[months.length - 1] : '';
+    }
+    sel.innerHTML = months.map(m => `<option value="${m}">${m}</option>`).join('');
+    sel.value = selectedHeatmapMonth;
+}
+
+function getHeatmapValue(cityName, dateStr, metric) {
+    if (metric === 'AQI') return CITY_DATA_BY_DATE[dateStr]?.[cityName] ?? null;
+    return POLLUTANTS_DATA[dateStr]?.[cityName]?.[metric] ?? null;
+}
+
+function buildMonthHeatmapData(cityName, monthYm, metric) {
+    const out = [];
+    (ALL_DATES || []).forEach(d => {
+        if (fmtYm(d) !== monthYm) return;
+        const value = getHeatmapValue(cityName, d, metric);
+        if (value == null || Number.isNaN(Number(value))) return;
+        out.push([fmtDate(d), Number(value)]);
+    });
+    return out;
+}
+
+function renderMonthHeatmap() {
+    const chartDom = document.getElementById('monthHeatmapChart');
+    const titleEl = document.getElementById('monthHeatmapTitle');
+    if (!chartDom) return;
+    if (!monthHeatmapChart) {
+        monthHeatmapChart = echarts.init(chartDom, null, { renderer: 'canvas' });
+    }
+    if (!currentCityName) {
+        monthHeatmapChart.clear();
+        if (titleEl) titleEl.textContent = '月历热力图（请先在地图上选择城市）';
+        return;
+    }
+    ensureHeatmapMonthPicker();
+    const monthYm = selectedHeatmapMonth;
+    const metric = selectedMetric || 'AQI';
+    const pieces = getMetricLegendPieces(metric);
+    const data = buildMonthHeatmapData(currentCityName, monthYm, metric);
+    const metricName = metric === 'AQI' ? 'AQI' : pollutantDisplayName(metric) + ' (ug/m3)';
+    if (titleEl) titleEl.textContent = `${currentCityName} · ${monthYm} · ${metricName} 月历热力图`;
+    monthHeatmapChart.setOption({
+        animation: false,
+        tooltip: {
+            position: 'top',
+            backgroundColor: 'rgba(255,255,255,0.96)',
+            borderColor: '#c5d8f5',
+            borderWidth: 1,
+            textStyle: { color: '#1a2a4a' },
+            formatter: p => `${p.data?.[0] || '--'}<br/>${metricName}: <b>${p.data?.[1] ?? '--'}</b>`
+        },
+        visualMap: {
+            type: 'piecewise',
+            orient: 'horizontal',
+            left: 'center',
+            top: 36,
+            itemWidth: 18,
+            itemHeight: 10,
+            textStyle: { color: '#6b8cba', fontSize: 11 },
+            pieces: pieces.map(x => ({ min: x.min, max: x.max, label: x.label, color: x.color }))
+        },
+        calendar: {
+            top: 80,
+            left: 26,
+            right: 26,
+            cellSize: ['auto', 28],
+            range: monthYm,
+            splitLine: {
+                show: true,
+                lineStyle: { color: '#e8eef8', width: 1 }
+            },
+            itemStyle: {
+                color: '#f8fbff',
+                borderColor: '#e8eef8',
+                borderWidth: 1
+            },
+            dayLabel: {
+                nameMap: ['日', '一', '二', '三', '四', '五', '六'],
+                color: '#7a9cc0'
+            },
+            monthLabel: { show: false },
+            yearLabel: { show: false }
+        },
+        series: {
+            type: 'heatmap',
+            coordinateSystem: 'calendar',
+            data: data
+        }
+    }, true);
+    setTimeout(() => monthHeatmapChart && monthHeatmapChart.resize(), 30);
+}
+
+function applyDetailViewMode(mode) {
+    detailViewMode = mode === 'heatmap' ? 'heatmap' : 'city';
+    const modeBar = document.getElementById('analysisModeBar');
+    const infoBody = document.getElementById('infoBody');
+    const aiSection = document.getElementById('aiInsightSection');
+    const hmSection = document.getElementById('monthHeatmapSection');
+    if (modeBar) modeBar.style.display = currentCityName ? 'flex' : 'none';
+    document.querySelectorAll('.analysis-mode-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.mode === detailViewMode);
+    });
+    if (detailViewMode === 'heatmap') {
+        if (infoBody) infoBody.style.display = 'none';
+        if (aiSection) aiSection.style.display = 'none';
+        if (hmSection) hmSection.style.display = currentCityName ? 'block' : 'none';
+        renderMonthHeatmap();
+    } else {
+        if (hmSection) hmSection.style.display = 'none';
+        if (infoBody) infoBody.style.display = currentCityName ? 'flex' : 'none';
+        if (aiSection) aiSection.style.display = currentCityName ? 'block' : 'none';
+    }
+}
+
 function renderPollutantLegend() {
-    const legendWrap = document.getElementById('pollutantLegend');
     const sortHint = document.getElementById('pollutantSortHint');
-    if (!legendWrap || !sortHint) return;
-    const legendMetric = selectedMetric === 'AQI' ? 'AQI' : selectedMetric;
-    const metricName = legendMetric === 'AQI'
-        ? 'AQI'
-        : pollutantDisplayName(legendMetric) + ' (ug/m3)';
+    if (!sortHint) return;
     sortHint.innerHTML = '<span class="pollutant-sort-arrow">↓</span>严重程度降序';
-    const pieces = getMetricLegendPieces(legendMetric);
-    legendWrap.innerHTML = pieces.map(p =>
-        `<span class="pollutant-legend-item" title="${metricName} ${p.label} ${p.range}">`
-        + `<span class="pollutant-legend-dot" style="background:${p.color};"></span>`
-        + `<span>${p.label} ${p.range}</span></span>`
-    ).join('');
 }
 
 function renderPollutantBars(pollutants) {
@@ -1620,14 +1812,17 @@ function openCityDetail(cityName) {
     document.getElementById('infoHeaderContent').style.display = 'flex';
     document.getElementById('infoBody').style.display = 'flex';
     document.getElementById('filterBar').style.display = 'flex';
-    document.getElementById('aiInsightSection').style.display = 'block';
+    document.getElementById('analysisModeBar').style.display = 'flex';
+    document.getElementById('aiInsightSection').style.display = detailViewMode === 'city' ? 'block' : 'none';
     document.getElementById('compareBtn').style.display = 'inline-flex';
     setText('selectedCityBadge', cityName);
     setText('chartPanelTitle', cityName + ' - ' + t('city.trend7d'));
+    ensureHeatmapMonthPicker();
     refreshAIInsightPanel();
     if (typeof renderSettlementAnalysis === 'function') {
         renderSettlementAnalysis();
     }
+    applyDetailViewMode(detailViewMode);
 }
 
 function showCityInfo(cityName, aqiValue) {
@@ -1664,7 +1859,8 @@ function updateCityPanel() {
         document.getElementById('aiInsightSection').style.display = 'none';
         return;
     }
-    document.getElementById('aiInsightSection').style.display = currentCityName ? 'block' : 'none';
+    document.getElementById('analysisModeBar').style.display = currentCityName ? 'flex' : 'none';
+    document.getElementById('aiInsightSection').style.display = (currentCityName && detailViewMode === 'city') ? 'block' : 'none';
     if (!currentCityName) return;
 
     const dateStr = ALL_DATES[currentDateIndex];
@@ -1688,11 +1884,16 @@ function updateCityPanel() {
     renderPollutantBars(pollutants);
     setText('healthAdvice', info ? info.advice : t('city.no_data_day'));
 
-    renderLineChart();
-    if (typeof renderSettlementAnalysis === 'function') {
-        renderSettlementAnalysis();
+    if (detailViewMode === 'city') {
+        renderLineChart();
+        if (typeof renderSettlementAnalysis === 'function') {
+            renderSettlementAnalysis();
+        }
+    } else {
+        renderMonthHeatmap();
     }
     refreshAIInsightPanel();
+    applyDetailViewMode(detailViewMode);
 }
 
 function renderLineChart() {
@@ -1826,8 +2027,25 @@ document.querySelectorAll('.filter-btn').forEach(btn => {
         } else {
             updateCityPanel();
             refreshAIInsightPanel();
+            if (detailViewMode === 'heatmap') renderMonthHeatmap();
         }
     });
+});
+
+document.querySelectorAll('.analysis-mode-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+        applyDetailViewMode(this.dataset.mode);
+        if (detailViewMode === 'city') {
+            updateCityPanel();
+        } else {
+            renderMonthHeatmap();
+        }
+    });
+});
+
+document.getElementById('monthPicker')?.addEventListener('change', function() {
+    selectedHeatmapMonth = this.value;
+    if (detailViewMode === 'heatmap') renderMonthHeatmap();
 });
 
 document.getElementById('aiGenerateBtn')?.addEventListener('click', () => {

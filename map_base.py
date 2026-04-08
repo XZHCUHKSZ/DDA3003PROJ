@@ -268,8 +268,8 @@ body {
     display: flex;
     align-items: center;
     gap: 9px;
-    min-width: 500px;
-    max-width: 75vw;
+    min-width: 760px;
+    max-width: 88vw;
     pointer-events: all;
 }
 #topTimelineBar button {
@@ -307,6 +307,7 @@ body {
 }
 #topSlider {
     flex: 1;
+    min-width: 460px;
     -webkit-appearance: none;
     appearance: none;
     height: 5px;
@@ -327,6 +328,26 @@ body {
 }
 #topSlider::-webkit-slider-thumb:hover {
     transform: scale(1.25);
+}
+@media (max-width: 1200px) {
+    #topTimelineBar {
+        min-width: 620px;
+        max-width: 92vw;
+    }
+    #topSlider {
+        min-width: 320px;
+    }
+}
+@media (max-width: 860px) {
+    #topTimelineBar {
+        min-width: 0;
+        width: calc(100vw - 22px);
+        padding: 7px 10px 9px;
+        gap: 6px;
+    }
+    #topSlider {
+        min-width: 180px;
+    }
 }
 
 #scrollHint {
