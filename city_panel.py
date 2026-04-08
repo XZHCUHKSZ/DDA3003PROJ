@@ -467,36 +467,61 @@ def build_css() -> str:
     margin-top: 12px;
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-    gap: 10px;
+    gap: 12px;
 }
 .ai-block {
-    background: #f8fbff;
-    border: 1px solid #e4eef9;
-    border-radius: 10px;
-    padding: 10px 11px;
+    background: linear-gradient(180deg, #fbfdff 0%, #f4f8ff 100%);
+    border: 1px solid #dce9f8;
+    border-radius: 12px;
+    padding: 12px 13px;
+    box-shadow: 0 4px 14px rgba(21,101,192,0.08);
 }
 .ai-block h4 {
-    margin: 0 0 6px 0;
-    color: #5f83ad;
-    font-size: 12px;
+    margin: 0 0 8px 0;
+    color: #3e6a98;
+    font-size: 13px;
     font-weight: 800;
+    letter-spacing: 0.5px;
 }
 .ai-block p {
     margin: 0;
-    color: #2a4262;
-    font-size: 13px;
-    line-height: 1.65;
+    color: #1f3f62;
+    font-size: 14px;
+    line-height: 1.75;
     white-space: pre-wrap;
 }
-.ai-cause-list {
-    margin: 0;
-    padding-left: 18px;
-    color: #2a4262;
-    font-size: 13px;
-    line-height: 1.75;
+.ai-cause-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
 }
-.ai-cause-list li {
-    margin-bottom: 5px;
+.ai-cause-item {
+    display: grid;
+    grid-template-columns: 22px 1fr;
+    gap: 8px;
+    align-items: start;
+    border: 1px solid #d8e6f8;
+    border-radius: 9px;
+    background: #fafdff;
+    padding: 8px 10px;
+}
+.ai-cause-no {
+    width: 22px;
+    height: 22px;
+    border-radius: 7px;
+    background: #e5f0ff;
+    color: #1b5fb7;
+    font-size: 12px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+.ai-cause-text {
+    color: #24476f;
+    font-size: 13px;
+    line-height: 1.72;
 }
 #aiSources {
     margin-top: 10px;
@@ -811,22 +836,51 @@ function escapeHtml(text) {
 
 function formatCauseBulletList(text) {
     const cleaned = stripSourceMarks(text || '');
-    if (!cleaned) return '<ol class="ai-cause-list"><li>--</li></ol>';
+    if (!cleaned) {
+        return '<div class="ai-cause-grid"><div class="ai-cause-item"><div class="ai-cause-no">1</div><div class="ai-cause-text">--</div></div></div>';
+    }
 
-    let lines = cleaned
-        .replace(/\\r/g, '')
-        .split(/\\n|；|。/)
+    const normalized = cleaned.replace(/\\r/g, '');
+    let lines = normalized
+        .split('\\n')
         .map(s => s.trim())
         .filter(Boolean);
 
-    if (!lines.length) lines = [cleaned];
-    const econLines = lines.filter(s => /经济|GDP|产业|工业|制造业/.test(s));
-    const nonEconLines = lines.filter(s => !/经济|GDP|产业|工业|制造业/.test(s));
+    const numbered = lines
+        .map(line => line.replace(/^[-*]\\s*/, '').trim())
+        .map(line => {
+            const m = line.match(/^(\\d+)\\s*[\\.\\)、)]\\s*(.+)$/);
+            return m ? { no: Number(m[1]), text: m[2].trim() } : null;
+        })
+        .filter(Boolean);
+
+    let orderedTexts = [];
+    if (numbered.length >= 2) {
+        orderedTexts = numbered
+            .sort((a, b) => a.no - b.no)
+            .map(x => x.text)
+            .filter(Boolean);
+    } else {
+        lines = normalized
+            .split(/\\n|；|。/)
+            .map(s => s.trim())
+            .filter(Boolean);
+        if (!lines.length) lines = [cleaned];
+        orderedTexts = lines;
+    }
+
+    if (!orderedTexts.length) orderedTexts = [cleaned];
+    if (orderedTexts.length > 6) orderedTexts = orderedTexts.slice(0, 6);
+
+    const econLines = orderedTexts.filter(s => /经济|GDP|产业|工业|制造业/.test(s));
+    const nonEconLines = orderedTexts.filter(s => !/经济|GDP|产业|工业|制造业/.test(s));
     const ordered = [...nonEconLines, ...econLines].slice(0, 6);
 
-    return '<ol class="ai-cause-list">'
-        + ordered.map(item => `<li>${escapeHtml(item)}</li>`).join('')
-        + '</ol>';
+    return '<div class="ai-cause-grid">'
+        + ordered.map((item, idx) =>
+            `<div class="ai-cause-item"><div class="ai-cause-no">${idx + 1}</div><div class="ai-cause-text">${escapeHtml(item)}</div></div>`
+        ).join('')
+        + '</div>';
 }
 
 const AI_CONFIG_STORAGE_KEY = 'APP_AI_SETTINGS';
