@@ -886,7 +886,10 @@ function formatCauseBulletList(text) {
     if (!ordered.length) {
         ordered.push(normalized);
     }
-    const trimmed = ordered.slice(0, 6);
+    const econItems = ordered.filter(s => /经济|GDP|产业结构|经济体量|经济总量/.test(s));
+    const nonEconItems = ordered.filter(s => !/经济|GDP|产业结构|经济体量|经济总量/.test(s));
+    const reordered = [...nonEconItems, ...econItems];
+    const trimmed = reordered.slice(0, 6);
     return '<div class="ai-cause-grid">'
         + trimmed.map((item, idx) =>
             `<div class="ai-cause-item"><div class="ai-cause-no">${idx + 1}</div><div class="ai-cause-text">${escapeHtml(item)}</div></div>`
