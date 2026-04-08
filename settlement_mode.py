@@ -511,6 +511,12 @@ function ensureSettlementUI() {
         }
     });
 
+    window.addEventListener('resize', () => {
+        syncTwinPanelHeights();
+        if (metricsChart) metricsChart.resize();
+        if (settlementMapChart) settlementMapChart.resize();
+    });
+
     settlementUIReady = true;
 }
 
@@ -524,9 +530,32 @@ function setSettlementLayoutVisible(visible) {
         host.style.display = visible ? 'block' : 'none';
     }
     setTimeout(() => {
+        syncTwinPanelHeights();
         if (metricsChart) metricsChart.resize();
         if (settlementMapChart) settlementMapChart.resize();
     }, 40);
+}
+
+function syncTwinPanelHeights() {
+    const grid = document.getElementById('analysisTwinGrid');
+    const metricsCard = document.getElementById('metricsCard');
+    const metricsDom = document.getElementById('metricsChart');
+    const titleEl = document.getElementById('chartPanelTitle');
+    const settlementPanel = document.getElementById('settlementPanel');
+    if (!grid || !metricsCard || !metricsDom) return;
+    const isSideBySide = grid.classList.contains('settlement-visible') && window.innerWidth > 1199;
+    if (!isSideBySide || !settlementPanel) {
+        metricsCard.style.height = '';
+        metricsDom.style.height = '';
+        return;
+    }
+    const rightHeight = settlementPanel.offsetHeight || 0;
+    if (!rightHeight) return;
+    const titleHeight = titleEl ? titleEl.offsetHeight : 0;
+    const verticalPadding = 34;
+    const chartHeight = Math.max(300, rightHeight - titleHeight - verticalPadding);
+    metricsCard.style.height = rightHeight + 'px';
+    metricsDom.style.height = chartHeight + 'px';
 }
 
 function applySettlementView() {
@@ -953,6 +982,7 @@ async function renderSettlementMiniMap(centerCity, dateStr, rows) {
             }
         ]
     }, true);
+    syncTwinPanelHeights();
 }
 
 function hideSettlementPanel() {
