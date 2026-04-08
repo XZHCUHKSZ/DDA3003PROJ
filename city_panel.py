@@ -235,6 +235,39 @@ def build_css() -> str:
     flex-shrink: 0;
     font-weight: 700;
 }
+#analysisTwinGrid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+    align-items: start;
+    min-height: 0;
+    flex: 1;
+}
+#analysisTwinGrid #metricsChart {
+    min-height: 330px;
+}
+#settlementPanelHost {
+    display: none;
+    min-width: 0;
+}
+#analysisTwinGrid.settlement-visible {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+#analysisTwinGrid.settlement-visible #settlementPanelHost {
+    display: block;
+}
+#analysisTwinGrid.settlement-visible #settlementPanel {
+    margin-top: 0;
+}
+@media (max-width: 1199px) {
+    #analysisTwinGrid,
+    #analysisTwinGrid.settlement-visible {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    #analysisTwinGrid.settlement-visible #settlementPanel {
+        margin-top: 12px;
+    }
+}
 
 #dateNavBar {
     position: sticky;
@@ -620,7 +653,10 @@ def build_dom(all_dates: list[str], current_index: int) -> str:
 
         <div id="chartPanel">
             <div id="chartPanelTitle">{trend_title}</div>
-            <div id="metricsChart" style="flex:1; min-height:300px;"></div>
+            <div id="analysisTwinGrid">
+                <div id="metricsChart"></div>
+                <div id="settlementPanelHost"></div>
+            </div>
         </div>
     </div>
 

@@ -439,7 +439,7 @@ async function fetchProvinceCityBoundaries(provinceAdcode) {
 
 function ensureSettlementUI() {
     if (settlementUIReady) return;
-    const panel = document.getElementById('chartPanel');
+    const panel = document.getElementById('settlementPanelHost') || document.getElementById('chartPanel');
     if (!panel) return;
 
     const host = document.createElement('div');
@@ -512,6 +512,21 @@ function ensureSettlementUI() {
     });
 
     settlementUIReady = true;
+}
+
+function setSettlementLayoutVisible(visible) {
+    const grid = document.getElementById('analysisTwinGrid');
+    const host = document.getElementById('settlementPanelHost');
+    if (grid) {
+        grid.classList.toggle('settlement-visible', !!visible);
+    }
+    if (host) {
+        host.style.display = visible ? 'block' : 'none';
+    }
+    setTimeout(() => {
+        if (metricsChart) metricsChart.resize();
+        if (settlementMapChart) settlementMapChart.resize();
+    }, 40);
 }
 
 function applySettlementView() {
@@ -944,6 +959,7 @@ function hideSettlementPanel() {
     ensureSettlementUI();
     const panel = document.getElementById('settlementPanel');
     if (panel) panel.style.display = 'none';
+    setSettlementLayoutVisible(false);
 }
 
 function onSettlementModeChange() {
@@ -1011,9 +1027,11 @@ async function renderSettlementAnalysis() {
     if (compareMode || !currentCityName) {
         panel.style.display = 'none';
         settlementCompareMode = false;
+        setSettlementLayoutVisible(false);
         return;
     }
     panel.style.display = 'block';
+    setSettlementLayoutVisible(true);
     if (settlementLastCenterCity !== currentCityName) {
         settlementLastCenterCity = currentCityName;
         settlementViewZoom = null;
