@@ -1,4 +1,6 @@
+using AQDeskShell.Services;
 using AQDeskShell.ViewModels;
+using System;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
@@ -143,7 +145,33 @@ public partial class HomePage : Page, INotifyPropertyChanged
             Process.Start(new ProcessStartInfo(guide) { UseShellExecute = true });
             return;
         }
-        MessageBox.Show("Guide not found.");
+
+        Process.Start(new ProcessStartInfo(DataBundleService.OnlineGuideUrl) { UseShellExecute = true });
+    }
+
+    private async void DownloadData_OnClick(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            InitProgress = 0;
+            InitMessage = "Downloading data bundle...";
+            var progress = new Progress<int>(p =>
+            {
+                InitProgress = p;
+                if (p < 100) InitMessage = $"Downloading data bundle... {p}%";
+            });
+
+            var dir = await _state.DataBundle.DownloadAndExtractAsync(_state.ProjectRoot, progress);
+            InitProgress = 100;
+            InitMessage = "Data bundle downloaded and extracted.";
+            RefreshDataStatus();
+            MessageBox.Show($"Download completed.\nExtracted to:\n{dir}", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            InitMessage = "Data download failed.";
+            MessageBox.Show($"Download failed: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     private void OnPropertyChanged([CallerMemberName] string? memberName = null)
@@ -151,4 +179,3 @@ public partial class HomePage : Page, INotifyPropertyChanged
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(memberName));
     }
 }
-

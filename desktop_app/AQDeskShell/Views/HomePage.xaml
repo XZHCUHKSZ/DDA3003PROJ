@@ -34,6 +34,7 @@
                         <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                             <Button Width="130" Height="32" Content="Check Data" Click="CheckData_OnClick" />
                             <Button Width="160" Height="32" Margin="8,0,0,0" Content="Open Data Folder" Click="OpenDataFolder_OnClick" />
+                            <Button Width="170" Height="32" Margin="8,0,0,0" Content="Download Data" Click="DownloadData_OnClick" />
                             <Button Width="170" Height="32" Margin="8,0,0,0" Content="Download Guide" Click="OpenGuide_OnClick" />
                         </StackPanel>
                     </StackPanel>
