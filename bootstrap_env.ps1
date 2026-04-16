@@ -6,6 +6,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$env:PYTHONIOENCODING = "utf-8"
+$env:PYTHONUTF8 = "1"
 
 Set-Location -LiteralPath $PSScriptRoot
 $ProjectRoot = (Get-Location).Path
