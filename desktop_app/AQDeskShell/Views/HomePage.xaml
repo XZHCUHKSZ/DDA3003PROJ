@@ -5,55 +5,63 @@
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
       mc:Ignorable="d"
       Background="#EEF3F9">
-    <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
-        <Grid Margin="20">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="1.2*" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
+    <Grid Margin="20">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="1.25*" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
 
-            <Border Grid.Column="0"
-                    Margin="0,0,14,0"
-                    Padding="18"
-                    CornerRadius="12"
-                    Background="White"
-                    BorderBrush="#D9E5F4"
-                    BorderThickness="1">
-                <StackPanel>
-                    <TextBlock Text="项目简介" FontSize="22" FontWeight="Bold" Foreground="#17436F" />
-                    <TextBlock Margin="0,10,0,16"
-                               TextWrapping="Wrap"
-                               FontSize="14"
-                               Foreground="#345D89"
-                               Text="本平台用于中国城市空气质量可视化、聚落扩散分析与月历热力解读。桌面应用会自动准备运行环境并托管地图页面，无需用户手工安装依赖。" />
-                    <StackPanel Orientation="Horizontal">
-                        <Button Width="140" Height="36" Content="初始化环境" Click="InitEnv_OnClick" />
-                        <Button Width="180" Height="36" Margin="10,0,0,0" Content="进入地图工作台" Click="OpenWorkbench_OnClick" />
+        <Border Grid.Column="0"
+                Margin="0,0,14,0"
+                Padding="18"
+                CornerRadius="12"
+                Background="White"
+                BorderBrush="#D9E5F4"
+                BorderThickness="1">
+            <StackPanel>
+                <TextBlock Text="Project Overview" FontSize="22" FontWeight="Bold" Foreground="#17436F" />
+                <TextBlock Margin="0,10,0,12"
+                           TextWrapping="Wrap"
+                           FontSize="14"
+                           Foreground="#345D89"
+                           Text="This desktop shell runs map generation and local AI services in background. Users only need this app and a separate data bundle zip." />
+
+                <Border Background="#F6FAFF" BorderBrush="#DCE8F7" BorderThickness="1" CornerRadius="8" Padding="10">
+                    <StackPanel>
+                        <TextBlock Text="Data Bundle Status" FontWeight="Bold" Foreground="#2E5D8A" />
+                        <TextBlock Margin="0,6,0,0" Text="{Binding DataStatusMessage}" Foreground="#4A6A8A" TextWrapping="Wrap" />
+                        <TextBlock Margin="0,4,0,0" Text="{Binding DataPathHint}" Foreground="#6C88A6" FontSize="12" TextWrapping="Wrap" />
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                            <Button Width="130" Height="32" Content="Check Data" Click="CheckData_OnClick" />
+                            <Button Width="160" Height="32" Margin="8,0,0,0" Content="Open Data Folder" Click="OpenDataFolder_OnClick" />
+                            <Button Width="170" Height="32" Margin="8,0,0,0" Content="Download Guide" Click="OpenGuide_OnClick" />
+                        </StackPanel>
                     </StackPanel>
-                    <TextBlock Margin="0,12,0,0" Text="{Binding InitMessage}" Foreground="#4A6A8A" />
-                    <ProgressBar Margin="0,8,0,0" Height="8" Minimum="0" Maximum="100" Value="{Binding InitProgress}" />
-                </StackPanel>
-            </Border>
+                </Border>
 
-            <Border Grid.Column="1"
-                    Padding="10"
-                    CornerRadius="12"
-                    Background="White"
-                    BorderBrush="#D9E5F4"
-                    BorderThickness="1">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
-                    </Grid.RowDefinitions>
-                    <TextBlock Text="项目 Report" Margin="6,4,0,8" FontWeight="Bold" Foreground="#17436F" />
-                    <WebBrowser x:Name="ReportBrowser" Grid.Row="1" />
-                </Grid>
-            </Border>
-        </Grid>
+                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                    <Button Width="150" Height="36" Content="Prepare Runtime" Click="InitEnv_OnClick" />
+                    <Button Width="190" Height="36" Margin="10,0,0,0" Content="Open Map Workbench" Click="OpenWorkbench_OnClick" />
+                </StackPanel>
+                <TextBlock Margin="0,12,0,0" Text="{Binding InitMessage}" Foreground="#4A6A8A" />
+                <ProgressBar Margin="0,8,0,0" Height="8" Minimum="0" Maximum="100" Value="{Binding InitProgress}" />
+            </StackPanel>
+        </Border>
+
+        <Border Grid.Column="1"
+                Padding="10"
+                CornerRadius="12"
+                Background="White"
+                BorderBrush="#D9E5F4"
+                BorderThickness="1">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <TextBlock Text="Project Report / README" Margin="6,4,0,8" FontWeight="Bold" Foreground="#17436F" />
+                <WebBrowser x:Name="ReportBrowser" Grid.Row="1" />
+            </Grid>
+        </Border>
     </Grid>
 </Page>

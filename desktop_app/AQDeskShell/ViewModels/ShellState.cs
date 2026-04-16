@@ -10,6 +10,7 @@ public class ShellState : INotifyPropertyChanged
     private readonly BootstrapService _bootstrapService;
     private readonly ProcessService _processService;
     private readonly HealthService _healthService;
+    private readonly DataBundleService _dataBundleService;
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -28,6 +29,7 @@ public class ShellState : INotifyPropertyChanged
     public BootstrapService Bootstrap => _bootstrapService;
     public ProcessService Process => _processService;
     public HealthService Health => _healthService;
+    public DataBundleService DataBundle => _dataBundleService;
 
     public ShellState(string projectRoot)
     {
@@ -35,6 +37,7 @@ public class ShellState : INotifyPropertyChanged
         _bootstrapService = new BootstrapService(projectRoot);
         _processService = new ProcessService(projectRoot);
         _healthService = new HealthService();
+        _dataBundleService = new DataBundleService();
         HookEvents();
     }
 

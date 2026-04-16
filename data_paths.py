@@ -44,10 +44,12 @@ def resolve_main_data_csv(cli_data: str, project_root: Path) -> tuple[str | None
         else:
             candidates.append((p / "combined_air_quality_data.csv", "--data/combined_air_quality_data.csv"))
 
+    candidates.append((project_root.parent / "data" / "combined_air_quality_data.csv", "runtime sibling data/combined_air_quality_data.csv"))
     candidates.append((project_root / "data" / "combined_air_quality_data.csv", "repo data/combined_air_quality_data.csv"))
     candidates.append((project_root / "combined_air_quality_data.csv", "repo combined_air_quality_data.csv"))
-    candidates.append((Path(r"C:\Users\xzh88\Desktop\cleaned\combined_air_quality_data.csv"), "fixed C cleaned csv"))
-    candidates.append((Path(r"D:\xwechat_files\wxid_t5ne9kglije022_12bf\msg\file\2026-01\data\combined_air_quality_data.csv"), "fixed D data csv"))
+    fallback_csv = os.getenv("APP_FALLBACK_MAIN_CSV", "").strip()
+    if fallback_csv:
+        candidates.append((Path(fallback_csv), "env:APP_FALLBACK_MAIN_CSV"))
 
     seen: set[str] = set()
     for cand, label in candidates:
@@ -75,9 +77,7 @@ def resolve_heatmap_data_root(main_csv_path: str, project_root: Path) -> tuple[s
         candidates.append((bundle / "data", "env:APP_DATA_BUNDLE_DIR/data"))
         candidates.append((bundle, "env:APP_DATA_BUNDLE_DIR"))
 
-    fixed_root = Path(r"D:\xwechat_files\wxid_t5ne9kglije022_12bf\msg\file\2026-01\data")
-    candidates.append((fixed_root / "data", "fixed D root data/"))
-    candidates.append((fixed_root, "fixed D root"))
+    candidates.append((project_root.parent / "data", "runtime sibling data/"))
 
     if main_csv_path:
         p = Path(main_csv_path)
@@ -90,6 +90,9 @@ def resolve_heatmap_data_root(main_csv_path: str, project_root: Path) -> tuple[s
                 candidates.append((p.parent, "main csv parent"))
 
     candidates.append((project_root / "data", "repo data/"))
+    fallback_root = os.getenv("APP_FALLBACK_HEATMAP_ROOT", "").strip()
+    if fallback_root:
+        candidates.append((Path(fallback_root), "env:APP_FALLBACK_HEATMAP_ROOT"))
 
     seen: set[str] = set()
     for cand, label in candidates:
@@ -116,4 +119,3 @@ def resolve_output_dir(cli_out: str, project_root: Path) -> tuple[str, str]:
     out = project_root / "visualizations"
     out.mkdir(parents=True, exist_ok=True)
     return str(out), f"default repo visualizations -> {out}"
-

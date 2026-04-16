@@ -57,3 +57,24 @@
 - 打包器（Inno Setup/WiX）将 `runtime + data_bundle + 壳程序` 一并封装
 - 产物：一个 `Setup.exe`
 
+## 6. 数据包发布（第二种方案落地）
+
+使用脚本打包数据（发布者执行）：
+
+```bash
+python tools/build_data_bundle.py \
+  --main-csv "C:/path/to/combined_air_quality_data.csv" \
+  --hourly-root "D:/path/to/daily_csv_root" \
+  --out-dir "release_data" \
+  --version "2026.04.16"
+```
+
+输出：
+- `release_data/data_bundle_<version>.zip`
+- `release_data/data_bundle_<version>/manifest.json`
+
+用户侧步骤：
+1. 安装 `Setup.exe`
+2. 下载 `data_bundle_<version>.zip`
+3. 解压后保持 `data/` 目录位于 `AQDeskShell.exe` 同级
+4. 打开应用首页点击 `Check Data`

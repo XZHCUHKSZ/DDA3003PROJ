@@ -1,5 +1,6 @@
 using AQDeskShell.ViewModels;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Windows;
@@ -11,7 +12,9 @@ public partial class HomePage : Page, INotifyPropertyChanged
 {
     private readonly ShellState _state;
     private int _initProgress;
-    private string _initMessage = "等待初始化";
+    private string _initMessage = "Waiting for runtime setup.";
+    private string _dataStatusMessage = "Checking data bundle...";
+    private string _dataPathHint = "";
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -37,6 +40,28 @@ public partial class HomePage : Page, INotifyPropertyChanged
         }
     }
 
+    public string DataStatusMessage
+    {
+        get => _dataStatusMessage;
+        set
+        {
+            if (_dataStatusMessage == value) return;
+            _dataStatusMessage = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public string DataPathHint
+    {
+        get => _dataPathHint;
+        set
+        {
+            if (_dataPathHint == value) return;
+            _dataPathHint = value;
+            OnPropertyChanged();
+        }
+    }
+
     public HomePage(ShellState state)
     {
         InitializeComponent();
@@ -45,6 +70,14 @@ public partial class HomePage : Page, INotifyPropertyChanged
         _state.Bootstrap.ProgressChanged += Bootstrap_ProgressChanged;
         _state.Bootstrap.Completed += Bootstrap_Completed;
         LoadReportPreview();
+        RefreshDataStatus();
+    }
+
+    private void RefreshDataStatus()
+    {
+        var status = _state.DataBundle.Check(_state.ProjectRoot);
+        DataStatusMessage = status.Message;
+        DataPathHint = $"Expected folder: {status.DataDir}";
     }
 
     private void LoadReportPreview()
@@ -58,12 +91,12 @@ public partial class HomePage : Page, INotifyPropertyChanged
 
     private async void InitEnv_OnClick(object sender, RoutedEventArgs e)
     {
-        InitMessage = "正在初始化环境...";
+        InitMessage = "Preparing runtime...";
         InitProgress = 0;
         var ok = await _state.Bootstrap.RunPrepareAsync();
         if (!ok)
         {
-            MessageBox.Show("环境初始化失败，请到设置-日志查看详情。", "初始化失败", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show("Runtime setup failed. Open settings > logs for details.", "Setup Failed", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
@@ -81,7 +114,7 @@ public partial class HomePage : Page, INotifyPropertyChanged
         Dispatcher.Invoke(() =>
         {
             InitProgress = ok ? 100 : InitProgress;
-            InitMessage = ok ? "初始化完成" : "初始化失败";
+            InitMessage = ok ? "Runtime ready." : "Runtime setup failed.";
         });
     }
 
@@ -90,8 +123,32 @@ public partial class HomePage : Page, INotifyPropertyChanged
         NavigationService?.Navigate(new WorkbenchPage(_state));
     }
 
+    private void CheckData_OnClick(object sender, RoutedEventArgs e)
+    {
+        RefreshDataStatus();
+    }
+
+    private void OpenDataFolder_OnClick(object sender, RoutedEventArgs e)
+    {
+        var status = _state.DataBundle.Check(_state.ProjectRoot);
+        Directory.CreateDirectory(status.DataDir);
+        Process.Start(new ProcessStartInfo("explorer.exe", status.DataDir) { UseShellExecute = true });
+    }
+
+    private void OpenGuide_OnClick(object sender, RoutedEventArgs e)
+    {
+        var guide = Path.Combine(_state.ProjectRoot, "PRODUCT_PACKAGING_CHECKLIST.md");
+        if (File.Exists(guide))
+        {
+            Process.Start(new ProcessStartInfo(guide) { UseShellExecute = true });
+            return;
+        }
+        MessageBox.Show("Guide not found.");
+    }
+
     private void OnPropertyChanged([CallerMemberName] string? memberName = null)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(memberName));
     }
 }
+
