@@ -31,6 +31,11 @@ public partial class MainWindow : Window
     private static string ResolveProjectRoot()
     {
         var baseDir = AppDomain.CurrentDomain.BaseDirectory;
+        var runtimeDir = Path.Combine(baseDir, "runtime");
+        if (File.Exists(Path.Combine(runtimeDir, "main.py")))
+        {
+            return runtimeDir;
+        }
         var dir = new DirectoryInfo(baseDir);
         while (dir != null && !File.Exists(Path.Combine(dir.FullName, "main.py")))
         {

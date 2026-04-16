@@ -2,3 +2,6 @@ __pycache__/
 *.pyc
 logs/
 .venv/
+dist/
+release_data/
+desktop_app/publish/

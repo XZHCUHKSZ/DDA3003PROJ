@@ -143,10 +143,12 @@ public partial class WorkbenchPage : Page, INotifyPropertyChanged
 
     private void TryOpenMapPage()
     {
+        var runtimeDir = new DirectoryInfo(_state.ProjectRoot);
+        var installRoot = runtimeDir.Parent?.FullName ?? _state.ProjectRoot;
         var candidates = new[]
         {
             Path.Combine(_state.ProjectRoot, "visualizations", "interactive_air_quality_map.html"),
-            Path.Combine(@"C:\Users\xzh88\Desktop\cleaned\visualizations", "interactive_air_quality_map.html"),
+            Path.Combine(installRoot, "visualizations", "interactive_air_quality_map.html"),
         };
         var localMap = candidates.FirstOrDefault(File.Exists);
         if (!string.IsNullOrWhiteSpace(localMap))
