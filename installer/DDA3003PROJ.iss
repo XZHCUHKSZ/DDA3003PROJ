@@ -1,4 +1,4 @@
-; Inno Setup script for DDA3003PROJ desktop app
+﻿; Inno Setup script for DDA3003PROJ desktop app
 ; Build payload first:
 ;   dotnet publish .\desktop_app\AQDeskShell\AQDeskShell.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o .\desktop_app\publish\win-x64
 ;   python .\tools\prepare_setup_payload.py --root . --out .\dist\setup_payload --publish-dir desktop_app/publish/win-x64
@@ -26,10 +26,10 @@ ArchitecturesAllowed=x64
 ArchitecturesInstallIn64BitMode=x64
 
 [Languages]
-Name: "chinesesimp"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
+Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
-Name: "desktopicon"; Description: "创建桌面图标"; GroupDescription: "附加任务:"
+Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional tasks:"
 
 [Files]
 Source: "{#PayloadRoot}\app\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -41,5 +41,6 @@ Name: "{group}\DDA3003PROJ"; Filename: "{app}\{#MyAppExeName}"
 Name: "{autodesktop}\DDA3003PROJ"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "启动 DDA3003PROJ"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#MyAppExeName}"; Description: "Launch DDA3003PROJ"; Flags: nowait postinstall skipifsilent
+
 

@@ -30,10 +30,9 @@ public class DataBundleService
             if (Directory.Exists(sibling)) dataDir = sibling;
         }
 
-        var mainCsv = Path.Combine(dataDir, "combined_air_quality_data.csv");
-        var mainOk = File.Exists(mainCsv);
-        var hourlyRoot = Path.Combine(dataDir, "hourly");
-        if (!Directory.Exists(hourlyRoot)) hourlyRoot = dataDir;
+        var mainCsv = FindCombinedCsv(dataDir);
+        var mainOk = !string.IsNullOrWhiteSpace(mainCsv);
+        var hourlyRoot = FindDailyRoot(dataDir) ?? dataDir;
 
         var count = 0;
         if (Directory.Exists(hourlyRoot))
@@ -46,6 +45,53 @@ public class DataBundleService
             ? $"Data ready: main csv + {count} daily csv files"
             : $"Data missing. Need data/combined_air_quality_data.csv and daily csv under data/hourly";
         return new DataBundleStatus(mainOk, hourlyOk, dataDir, count, msg);
+    }
+
+    private static string? FindCombinedCsv(string root)
+    {
+        if (!Directory.Exists(root)) return null;
+        var direct = Path.Combine(root, "combined_air_quality_data.csv");
+        if (File.Exists(direct)) return direct;
+        return Directory.GetFiles(root, "combined_air_quality_data.csv", SearchOption.AllDirectories)
+            .OrderBy(p => p.Length)
+            .FirstOrDefault();
+    }
+
+    private static string? FindDailyRoot(string root)
+    {
+        if (!Directory.Exists(root)) return null;
+        var candidates = new[]
+        {
+            Path.Combine(root, "hourly"),
+            Path.Combine(root, "data", "hourly"),
+            Path.Combine(root, "hourly", "data"),
+            Path.Combine(root, "data", "hourly", "data"),
+        };
+        foreach (var c in candidates)
+        {
+            if (CountDailyCsv(c) > 0) return c;
+        }
+
+        var dirs = Directory.GetDirectories(root, "*", SearchOption.AllDirectories).Prepend(root);
+        string? best = null;
+        var bestCount = 0;
+        foreach (var d in dirs)
+        {
+            var c = CountDailyCsv(d);
+            if (c > bestCount)
+            {
+                bestCount = c;
+                best = d;
+            }
+        }
+        return bestCount > 0 ? best : null;
+    }
+
+    private static int CountDailyCsv(string root)
+    {
+        if (!Directory.Exists(root)) return 0;
+        return Directory.GetFiles(root, "*.csv", SearchOption.AllDirectories)
+            .Count(fp => DailyToken.IsMatch(Path.GetFileNameWithoutExtension(fp)));
     }
 
     public async Task<string> DownloadAndExtractAsync(string projectRoot, IProgress<int>? progress = null, CancellationToken cancellationToken = default)
