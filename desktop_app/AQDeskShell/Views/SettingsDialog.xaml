@@ -1,0 +1,58 @@
+<Window x:Class="AQDeskShell.Views.SettingsDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="全局设置"
+        Height="680"
+        Width="980"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanMinimize"
+        Background="#F2F6FC">
+    <Grid Margin="14">
+        <TabControl>
+            <TabItem Header="环境管理">
+                <StackPanel Margin="12">
+                    <TextBlock Text="初始化/修复项目环境（Python 3.11 + venv + 锁定依赖）" Foreground="#355D87" />
+                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                        <Button Width="140" Height="34" Content="初始化环境" Click="BootstrapPrepare_OnClick" />
+                        <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" Text="{Binding EnvironmentStatus}" />
+                    </StackPanel>
+                    <ProgressBar Margin="0,10,0,0" Height="8" Value="{Binding EnvironmentProgress}" Minimum="0" Maximum="100" />
+                </StackPanel>
+            </TabItem>
+
+            <TabItem Header="AI 设置">
+                <Grid Margin="12">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Text="Provider" />
+                    <TextBox Grid.Row="0" Margin="120,0,0,6" Text="bailian" />
+                    <TextBlock Grid.Row="1" Text="Base URL" />
+                    <TextBox Grid.Row="1" Margin="120,0,0,6" Text="http://127.0.0.1:8787" />
+                    <TextBlock Grid.Row="2" Text="Model" />
+                    <TextBox Grid.Row="2" Margin="120,0,0,6" Text="qwen-plus" />
+                    <TextBlock Grid.Row="3" Text="API Key" />
+                    <PasswordBox Grid.Row="3" Margin="120,0,0,6" />
+                    <Button Grid.Row="4" Width="120" Height="34" HorizontalAlignment="Left" Margin="0,8,0,0" Content="测试连接(占位)" />
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="服务诊断">
+                <StackPanel Margin="12">
+                    <Button Width="140" Height="34" Content="刷新健康检查" Click="RefreshHealth_OnClick" />
+                    <TextBlock Margin="0,10,0,0" Text="{Binding HealthStatus}" />
+                </StackPanel>
+            </TabItem>
+
+            <TabItem Header="日志">
+                <Grid Margin="12">
+                    <TextBox Text="{Binding LogsText}" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" IsReadOnly="True" />
+                </Grid>
+            </TabItem>
+        </TabControl>
+    </Grid>
+</Window>
