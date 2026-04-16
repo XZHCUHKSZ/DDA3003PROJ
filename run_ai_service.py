@@ -11,6 +11,8 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+from bootstrap_runtime import ensure_project_runtime
+
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8787
 CONTROL_HOST = "127.0.0.1"
@@ -72,44 +74,10 @@ def _build_control_cmd(host: str, port: int) -> list[str]:
     return [sys.executable, str(script_path), "--host", host, "--port", str(port)]
 
 
-def _resolve_service_python(project_root: Path) -> str:
-    if os.name == "nt":
-        venv_py = project_root / ".venv" / "Scripts" / "python.exe"
-    else:
-        venv_py = project_root / ".venv" / "bin" / "python"
-    if venv_py.exists():
-        return str(venv_py)
-    return sys.executable
-
-
 def _ensure_service_runtime(project_root: Path) -> tuple[bool, str]:
-    py_bin = _resolve_service_python(project_root)
-    if py_bin == sys.executable:
-        # try creating venv first for dependency isolation
-        try:
-            subprocess.run(
-                [sys.executable, "-m", "venv", str(project_root / ".venv")],
-                cwd=str(project_root),
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                check=False,
-                timeout=40,
-            )
-        except Exception:
-            pass
-        py_bin = _resolve_service_python(project_root)
-
-    try:
-        subprocess.run(
-            [py_bin, "-m", "pip", "install", "-q", "fastapi", "uvicorn", "pydantic"],
-            cwd=str(project_root),
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=False,
-            timeout=120,
-        )
-    except Exception:
-        return False, "Dependency bootstrap failed."
+    ok, msg, py_bin = ensure_project_runtime(project_root)
+    if not ok:
+        return False, msg
     return True, py_bin
 
 
