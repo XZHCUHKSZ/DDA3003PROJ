@@ -63,11 +63,11 @@ function Install-Python311 {
     }
 }
 
-function Invoke-Py([string]$pyCmd, [string[]]$args) {
+function Invoke-Py([string]$pyCmd, [string[]]$pyArgs) {
     if ($pyCmd -eq "py -3.11") {
-        & py -3.11 @args
+        & py -3.11 @pyArgs
     } else {
-        & $pyCmd @args
+        & $pyCmd @pyArgs
     }
     return $LASTEXITCODE
 }
@@ -112,6 +112,15 @@ function Ensure-Deps {
     throw "Dependency installation failed."
 }
 
+function Verify-Deps {
+    Write-Step "Verifying dependency imports..."
+    & $VenvPython -c "import fastapi,uvicorn,pydantic,pandas,pyecharts,openpyxl;print('DEPS_OK')"
+    if ($LASTEXITCODE -ne 0) {
+        throw "Dependency verification failed."
+    }
+    Write-Step "Dependency verification passed."
+}
+
 try {
     Write-Step "Workspace: $ProjectRoot"
     $pyCmd = Resolve-Python311
@@ -124,6 +133,7 @@ try {
 
     Ensure-Venv $pyCmd
     Ensure-Deps
+    Verify-Deps
     Write-Step "Environment is ready."
 
     if ($Mode -eq "prepare") {
