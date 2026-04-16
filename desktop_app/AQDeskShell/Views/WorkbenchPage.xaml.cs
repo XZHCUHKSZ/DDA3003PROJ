@@ -1,3 +1,4 @@
+using AQDeskShell.Services;
 using AQDeskShell.ViewModels;
 using System.ComponentModel;
 using System.IO;
@@ -11,7 +12,11 @@ namespace AQDeskShell.Views;
 public partial class WorkbenchPage : Page, INotifyPropertyChanged
 {
     private readonly ShellState _state;
-    private string _workbenchStatus = "未启动";
+    private bool _autoStarted;
+    private bool _isBusy;
+    private int _runProgress;
+    private string _runMessage = "Ready.";
+    private string _workbenchStatus = "Idle";
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -22,7 +27,41 @@ public partial class WorkbenchPage : Page, INotifyPropertyChanged
         {
             if (_workbenchStatus == value) return;
             _workbenchStatus = value;
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(WorkbenchStatus)));
+            OnPropertyChanged();
+        }
+    }
+
+    public int RunProgress
+    {
+        get => _runProgress;
+        set
+        {
+            if (_runProgress == value) return;
+            _runProgress = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public string RunMessage
+    {
+        get => _runMessage;
+        set
+        {
+            if (_runMessage == value) return;
+            _runMessage = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public bool IsBusy
+    {
+        get => _isBusy;
+        set
+        {
+            if (_isBusy == value) return;
+            _isBusy = value;
+            OnPropertyChanged();
+            BusyOverlay.Visibility = _isBusy ? Visibility.Visible : Visibility.Collapsed;
         }
     }
 
@@ -31,13 +70,75 @@ public partial class WorkbenchPage : Page, INotifyPropertyChanged
         InitializeComponent();
         _state = state;
         DataContext = this;
+        _state.Process.ProgressChanged += Process_ProgressChanged;
+        _state.Process.ProcessCompleted += Process_ProcessCompleted;
         Loaded += WorkbenchPage_Loaded;
+        Unloaded += WorkbenchPage_Unloaded;
+    }
+
+    private void WorkbenchPage_Unloaded(object sender, RoutedEventArgs e)
+    {
+        _state.Process.ProgressChanged -= Process_ProgressChanged;
+        _state.Process.ProcessCompleted -= Process_ProcessCompleted;
     }
 
     private async void WorkbenchPage_Loaded(object sender, RoutedEventArgs e)
     {
         await MapWebView.EnsureCoreWebView2Async();
         TryOpenMapPage();
+        if (!_autoStarted)
+        {
+            _autoStarted = true;
+            await RunMainPipelineAsync();
+        }
+    }
+
+    private async Task RunMainPipelineAsync()
+    {
+        if (_state.Process.IsRunning) return;
+        IsBusy = true;
+        RunProgress = 2;
+        RunMessage = "Starting hidden bootstrap pipeline...";
+        WorkbenchStatus = "Running main.py in background";
+        var code = await _state.Process.StartAllAsync();
+        if (code == 0)
+        {
+            RunProgress = 100;
+            RunMessage = "Completed.";
+            WorkbenchStatus = "Map generated";
+            TryOpenMapPage();
+        }
+        else
+        {
+            RunMessage = $"Failed with exit code {code}";
+            WorkbenchStatus = "Run failed";
+        }
+        IsBusy = false;
+    }
+
+    private void Process_ProgressChanged(object? sender, ProcessProgressEvent e)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            if (e.Progress > 0) RunProgress = e.Progress;
+            RunMessage = e.Message;
+        });
+    }
+
+    private void Process_ProcessCompleted(object? sender, int exitCode)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            if (exitCode == 0)
+            {
+                RunProgress = 100;
+                WorkbenchStatus = "Pipeline finished";
+            }
+            else if (RunProgress < 100)
+            {
+                WorkbenchStatus = $"Pipeline failed ({exitCode})";
+            }
+        });
     }
 
     private void TryOpenMapPage()
@@ -51,26 +152,25 @@ public partial class WorkbenchPage : Page, INotifyPropertyChanged
         if (!string.IsNullOrWhiteSpace(localMap))
         {
             MapWebView.Source = new Uri(localMap);
-            WorkbenchStatus = "地图已加载";
+            WorkbenchStatus = "Map loaded in embedded WebView";
             return;
         }
         MapWebView.Source = new Uri("http://127.0.0.1:8790/health");
-        WorkbenchStatus = "未找到地图文件，当前显示服务状态页";
+        WorkbenchStatus = "Map file not found yet, showing health endpoint";
     }
 
     private async void StartAll_OnClick(object sender, RoutedEventArgs e)
     {
-        WorkbenchStatus = "正在启动服务...";
-        var code = await _state.Process.StartAllAsync();
-        WorkbenchStatus = code == 0 ? "服务启动完成" : $"服务启动失败，退出码 {code}";
-        if (code == 0)
-        {
-            TryOpenMapPage();
-        }
+        await RunMainPipelineAsync();
     }
 
     private void BackHome_OnClick(object sender, RoutedEventArgs e)
     {
         NavigationService?.Navigate(new HomePage(_state));
+    }
+
+    private void OnPropertyChanged([CallerMemberName] string? memberName = null)
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(memberName));
     }
 }

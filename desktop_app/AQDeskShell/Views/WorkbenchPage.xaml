@@ -13,15 +13,33 @@
         </Grid.RowDefinitions>
 
         <Border Grid.Row="0" Background="White" BorderBrush="#D9E5F4" BorderThickness="1" CornerRadius="10" Padding="10">
-            <DockPanel>
-                <Button Content="返回首页" Width="100" DockPanel.Dock="Left" Click="BackHome_OnClick" />
-                <Button Content="启动地图" Width="100" Margin="8,0,0,0" DockPanel.Dock="Left" Click="StartAll_OnClick" />
-                <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" Foreground="#4A6A8A" Text="{Binding WorkbenchStatus}" />
-            </DockPanel>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Button Content="Back Home" Width="110" Grid.Column="0" Click="BackHome_OnClick" />
+                <Button Content="Run Main (Hidden)" Width="150" Grid.Column="1" Margin="8,0,0,0" Click="StartAll_OnClick" />
+                <StackPanel Grid.Column="2" Margin="12,0,0,0">
+                    <TextBlock VerticalAlignment="Center" Foreground="#4A6A8A" Text="{Binding WorkbenchStatus}" />
+                    <ProgressBar Height="7" Margin="0,5,0,0" Minimum="0" Maximum="100" Value="{Binding RunProgress}" />
+                    <TextBlock Margin="0,4,0,0" FontSize="11" Foreground="#6D87A5" Text="{Binding RunMessage}" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+            </Grid>
         </Border>
 
         <Border Grid.Row="1" Margin="0,12,0,0" Background="White" BorderBrush="#D9E5F4" BorderThickness="1" CornerRadius="10">
-            <wv2:WebView2 x:Name="MapWebView" />
+            <Grid>
+                <wv2:WebView2 x:Name="MapWebView" />
+                <Border x:Name="BusyOverlay" Background="#AAFFFFFF" Visibility="Collapsed">
+                    <StackPanel Width="420" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <TextBlock Text="Preparing map runtime..." FontSize="18" FontWeight="Bold" Foreground="#1A4C7D" HorizontalAlignment="Center" />
+                        <ProgressBar Margin="0,10,0,0" Height="10" Minimum="0" Maximum="100" Value="{Binding RunProgress}" />
+                        <TextBlock Margin="0,8,0,0" Text="{Binding RunMessage}" Foreground="#4F6E90" TextAlignment="Center" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+            </Grid>
         </Border>
     </Grid>
 </Page>

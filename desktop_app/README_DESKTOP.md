@@ -25,4 +25,6 @@ dotnet run --project .\desktop_app\AQDeskShell\AQDeskShell.csproj
 - This is Phase A skeleton.
 - Runtime bootstrap is delegated to existing `bootstrap_env.ps1`.
 - Next phase will replace placeholder AI settings controls with real config persistence + provider check wiring.
-
+- Data resolution now supports packaged bundle and external fallbacks:
+  - main CSV: env/internal bundle/repo/C drive/D drive
+  - heatmap daily CSV root: env/internal bundle/D drive/main-csv sibling/repo
