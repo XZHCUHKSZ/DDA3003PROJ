@@ -121,6 +121,33 @@ function Verify-Deps {
     Write-Step "Dependency verification passed."
 }
 
+function Resolve-MainCsvForRun {
+    $preferred = @(
+        (Join-Path $ProjectRoot "..\\data\\combined_air_quality_data.csv"),
+        (Join-Path $ProjectRoot "data\\combined_air_quality_data.csv"),
+        (Join-Path $ProjectRoot "combined_air_quality_data.csv")
+    )
+    foreach ($p in $preferred) {
+        if (Test-Path $p) {
+            return (Resolve-Path $p).Path
+        }
+    }
+    $roots = @(
+        (Join-Path $ProjectRoot "..\\data"),
+        (Join-Path $ProjectRoot "data"),
+        $ProjectRoot
+    )
+    foreach ($r in $roots) {
+        if (-not (Test-Path $r)) { continue }
+        try {
+            $hit = Get-ChildItem -Path $r -Recurse -File -Filter "combined_air_quality_data.csv" -ErrorAction SilentlyContinue |
+                Select-Object -First 1
+            if ($hit) { return $hit.FullName }
+        } catch {}
+    }
+    return ""
+}
+
 try {
     Write-Step "Workspace: $ProjectRoot"
     $pyCmd = Resolve-Python311
@@ -146,8 +173,16 @@ try {
         exit $LASTEXITCODE
     }
     if ($Mode -eq "all") {
-        Write-Step "Starting full app (main.py --ai-autostart) ..."
-        & $VenvPython main.py --ai-autostart
+        $mainCsv = Resolve-MainCsvForRun
+        if ([string]::IsNullOrWhiteSpace($mainCsv)) {
+            Write-Warn "Main CSV not found before launch; running with auto-discovery."
+            Write-Step "Starting full app (main.py --ai-autostart) ..."
+            & $VenvPython main.py --ai-autostart
+        } else {
+            Write-Step "Using data file: $mainCsv"
+            Write-Step "Starting full app (main.py --data ... --ai-autostart) ..."
+            & $VenvPython main.py --data $mainCsv --ai-autostart
+        }
         exit $LASTEXITCODE
     }
     throw "Unknown mode: $Mode"

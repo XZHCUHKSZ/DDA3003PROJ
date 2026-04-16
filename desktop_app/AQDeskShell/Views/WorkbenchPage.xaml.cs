@@ -157,8 +157,24 @@ public partial class WorkbenchPage : Page, INotifyPropertyChanged
             WorkbenchStatus = "Map loaded in embedded WebView";
             return;
         }
-        MapWebView.Source = new Uri("http://127.0.0.1:8790/health");
-        WorkbenchStatus = "Map file not found yet, showing health endpoint";
+        var html = $@"
+<!doctype html>
+<html><head><meta charset='utf-8'><title>Map Not Ready</title>
+<style>body{{font-family:Segoe UI,Arial,sans-serif;background:#eef3f9;color:#19406b;padding:28px}}
+.box{{max-width:780px;background:#fff;border:1px solid #d9e5f4;border-radius:12px;padding:20px}}
+h2{{margin:0 0 10px}} code{{background:#f3f7fc;padding:2px 6px;border-radius:6px}}</style></head>
+<body><div class='box'>
+<h2>地图尚未生成</h2>
+<p>主流程尚未成功完成，请点击上方 <b>Run Main (Hidden)</b> 重试。</p>
+<p>常见原因：数据包未就位、Python 依赖未安装完成。</p>
+<p>预期地图路径：</p>
+<ul>
+<li><code>{candidates[0]}</code></li>
+<li><code>{candidates[1]}</code></li>
+</ul>
+</div></body></html>";
+        MapWebView.CoreWebView2.NavigateToString(html);
+        WorkbenchStatus = "Map file not found yet";
     }
 
     private async void StartAll_OnClick(object sender, RoutedEventArgs e)
