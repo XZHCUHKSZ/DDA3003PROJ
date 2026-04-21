@@ -1,6 +1,7 @@
 ﻿using AQDeskShell.Services;
 using AQDeskShell.ViewModels;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -85,24 +86,30 @@ public partial class WorkbenchPage : Page, INotifyPropertyChanged
 
     private async void WorkbenchPage_Loaded(object sender, RoutedEventArgs e)
     {
-        try
-        {
-            await MapWebView.EnsureCoreWebView2Async();
-            _webViewReady = true;
-        }
-        catch (Exception ex)
-        {
-            _webViewReady = false;
-            RunMessage = $"嵌入浏览器初始化失败：{ex.Message}";
-            WorkbenchStatus = "WebView2 unavailable";
-        }
-
+        await InitializeWebViewAsync();
         TryOpenMapPage();
 
         if (!_autoStarted)
         {
             _autoStarted = true;
             await RunMainPipelineAsync();
+        }
+    }
+
+    private async Task InitializeWebViewAsync()
+    {
+        try
+        {
+            await MapWebView.EnsureCoreWebView2Async();
+            _webViewReady = true;
+            InstallWebViewButton.Visibility = Visibility.Collapsed;
+        }
+        catch (Exception ex)
+        {
+            _webViewReady = false;
+            InstallWebViewButton.Visibility = Visibility.Visible;
+            RunMessage = $"嵌入浏览器初始化失败：{ex.Message}";
+            WorkbenchStatus = "WebView2 unavailable";
         }
     }
 
@@ -200,6 +207,85 @@ h2{{margin:0 0 10px}} code{{background:#f3f7fc;padding:2px 6px;border-radius:6px
     private async void StartAll_OnClick(object sender, RoutedEventArgs e)
     {
         await RunMainPipelineAsync();
+    }
+
+    private async void InstallWebView2_OnClick(object sender, RoutedEventArgs e)
+    {
+        InstallWebViewButton.IsEnabled = false;
+        IsBusy = true;
+        RunMessage = "正在安装 WebView2 Runtime...";
+        WorkbenchStatus = "Installing WebView2 runtime";
+
+        var ok = await Task.Run(InstallWebView2Runtime);
+
+        IsBusy = false;
+        InstallWebViewButton.IsEnabled = true;
+
+        if (!ok)
+        {
+            RunMessage = "WebView2 安装失败，请检查网络后重试。";
+            WorkbenchStatus = "WebView2 install failed";
+            return;
+        }
+
+        RunMessage = "WebView2 安装完成，正在重新加载地图区域...";
+        WorkbenchStatus = "Re-initializing WebView2";
+        await InitializeWebViewAsync();
+        TryOpenMapPage();
+    }
+
+    private static bool InstallWebView2Runtime()
+    {
+        var wingetOk = RunHiddenProcess(
+            "powershell",
+            "-NoProfile -ExecutionPolicy Bypass -Command \"winget install --id Microsoft.EdgeWebView2Runtime -e --silent --scope user --accept-package-agreements --accept-source-agreements\"",
+            out _
+        );
+        if (wingetOk) return true;
+
+        var tempExe = Path.Combine(Path.GetTempPath(), "MicrosoftEdgeWebView2Setup.exe");
+        var downloadCmd =
+            "$ErrorActionPreference='Stop';" +
+            "$url='https://go.microsoft.com/fwlink/p/?LinkId=2124703';" +
+            $"$out='{tempExe.Replace("\\", "\\\\")}';" +
+            "Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $out";
+
+        var downloaded = RunHiddenProcess(
+            "powershell",
+            $"-NoProfile -ExecutionPolicy Bypass -Command \"{downloadCmd}\"",
+            out _
+        );
+        if (!downloaded || !File.Exists(tempExe)) return false;
+
+        var installOk = RunHiddenProcess(tempExe, "/silent /install", out _);
+        try { File.Delete(tempExe); } catch { }
+        return installOk;
+    }
+
+    private static bool RunHiddenProcess(string fileName, string arguments, out int exitCode)
+    {
+        try
+        {
+            using var proc = Process.Start(new ProcessStartInfo(fileName, arguments)
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden,
+            });
+            if (proc is null)
+            {
+                exitCode = -1;
+                return false;
+            }
+            proc.WaitForExit();
+            exitCode = proc.ExitCode;
+            return exitCode == 0;
+        }
+        catch
+        {
+            exitCode = -1;
+            return false;
+        }
     }
 
     private void BackHome_OnClick(object sender, RoutedEventArgs e)
