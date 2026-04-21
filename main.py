@@ -22,10 +22,10 @@ from visualizer import InteractiveAirQualityMap
 
 def _try_start_heatmap_service(data_path: str) -> tuple[bool, str]:
     try:
-        mod = importlib.import_module("heatmap_service")
+        mod = importlib.import_module("run_heatmap_service")
         ensure_heatmap_service_running = getattr(mod, "ensure_heatmap_service_running", None)
         if ensure_heatmap_service_running is None:
-            return False, "heatmap_service.ensure_heatmap_service_running not found"
+            return False, "run_heatmap_service.ensure_heatmap_service_running not found"
     except Exception as exc:
         return False, f"heatmap module unavailable: {exc}"
     try:

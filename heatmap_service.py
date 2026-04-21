@@ -1,5 +1,6 @@
 ﻿from __future__ import annotations
 
+import argparse
 import csv
 import json
 import re
@@ -248,3 +249,29 @@ def ensure_heatmap_service_running(data_root: str, host: str = "127.0.0.1", port
     if not root.exists():
         return True, f"heatmap service started at http://{host}:{port} (data path missing: {data_root})"
     return True, f"heatmap service started at http://{host}:{port} (indexed {indexed} days from {root})"
+
+
+
+def serve_heatmap_service(data_root: str, host: str = "127.0.0.1", port: int = 8791) -> None:
+    ok, msg = _HeatmapHandler._reload_store(str(Path(data_root)))
+    if not ok:
+        raise RuntimeError(msg)
+    server = ThreadingHTTPServer((host, port), _HeatmapHandler)
+    server.serve_forever()
+
+
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Heatmap monthly service")
+    parser.add_argument("--data-root", required=True, help="Directory containing daily hourly CSV files")
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=8791)
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = _parse_args()
+    serve_heatmap_service(args.data_root, host=args.host, port=args.port)
+
+
+if __name__ == "__main__":
+    main()

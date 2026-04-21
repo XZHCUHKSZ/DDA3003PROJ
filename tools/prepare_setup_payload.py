@@ -61,6 +61,7 @@ def main() -> None:
         "bootstrap_runtime.py",
         "requirements-lock.txt",
         "run_ai_service.py",
+        "run_heatmap_service.py",
         "ai_control_service.py",
         "heatmap_service.py",
         "data_paths.py",
