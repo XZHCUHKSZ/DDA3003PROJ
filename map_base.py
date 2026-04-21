@@ -859,30 +859,54 @@ const bootForceReadyTimer = setTimeout(() => {
     }
 }, 15000);
 
-setTimeout(function() {
-    setBootStatus(t('loader.status.connect_map'), t('loader.sub.connect_map'));
+function tryAttachMainMapChart() {
     const mapWrapper = byId('mapWrapper');
+    if (!mapWrapper) return false;
     const chartDivs = document.querySelectorAll('[_echarts_instance_]');
+    let found = false;
 
     chartDivs.forEach(function(dom) {
-        if (dom.id !== 'metricsChart') {
+        if (dom.id === 'metricsChart') return;
+        if (!found) {
             mapWrapper.insertBefore(dom, mapWrapper.firstChild);
-            mapChartInstance = echarts.getInstanceByDom(dom);
+            if (typeof echarts !== 'undefined') {
+                mapChartInstance = echarts.getInstanceByDom(dom);
+            }
+            found = !!mapChartInstance;
         }
     });
 
-    if (!mapChartInstance) {
-        setBootStatus(t('loader.status.failed'), t('loader.sub.failed'));
-        showBootSlowHint();
-        clearTimeout(bootSlowTimer);
-        clearTimeout(bootForceReadyTimer);
-        markBootReady();
+    return found;
+}
+
+function waitForMainMapChart(attempt, onDone) {
+    if (tryAttachMainMapChart()) {
+        onDone(true);
         return;
     }
+    // 首次冷启动时，echarts 与主图实例可能晚于 DOM 出现，改成重试而非一次性失败。
+    if (attempt >= 120) {
+        onDone(false);
+        return;
+    }
+    setTimeout(() => waitForMainMapChart(attempt + 1, onDone), 100);
+}
 
-    setBootStatus(t('loader.status.bind'), t('loader.sub.bind'));
-    currentZoom = 1.2;
-    currentCenter = [105, 36];
+setTimeout(function bootAttachMap() {
+    setBootStatus(t('loader.status.connect_map'), t('loader.sub.connect_map'));
+    waitForMainMapChart(0, function(attached) {
+        if (!attached) {
+            setBootStatus(t('loader.status.failed'), '地图初始化超时，请点击“刷新并重建地图”重试');
+            showBootSlowHint();
+            clearTimeout(bootSlowTimer);
+            clearTimeout(bootForceReadyTimer);
+            markBootReady();
+            return;
+        }
+
+        setBootStatus(t('loader.status.bind'), t('loader.sub.bind'));
+        currentZoom = 1.2;
+        currentCenter = [105, 36];
 
     let isSettingView = false;
     const ZOOM_STEP = 1.5;
@@ -971,10 +995,11 @@ setTimeout(function() {
         if (!bootReadyToEnter) onBootRenderFinished();
     }, 1000);
 
-    window.addEventListener('resize', () => {
-        if (mapChartInstance) mapChartInstance.resize();
-        if (metricsChart) metricsChart.resize();
-        if (settlementMapChart) settlementMapChart.resize();
+        window.addEventListener('resize', () => {
+            if (mapChartInstance) mapChartInstance.resize();
+            if (metricsChart) metricsChart.resize();
+            if (settlementMapChart) settlementMapChart.resize();
+        });
     });
 }, 120);
 """
