@@ -1,4 +1,4 @@
-<Page x:Class="AQDeskShell.Views.WorkbenchPage"
+﻿<Page x:Class="AQDeskShell.Views.WorkbenchPage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -18,25 +18,18 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
-                <Button Content="Back Home" Width="110" Grid.Column="0" Click="BackHome_OnClick" />
-                <Button Content="Run Main (Hidden)" Width="150" Grid.Column="1" Margin="8,0,0,0" Click="StartAll_OnClick" />
+                <Button Content="返回主页" Width="110" Grid.Column="0" Click="BackHome_OnClick" />
+                <Button Content="刷新并重建地图" Width="150" Grid.Column="1" Margin="8,0,0,0" Click="StartAll_OnClick" />
                 <Button x:Name="InstallWebViewButton"
-                        Content="Install WebView2 Runtime"
-                        Width="190"
+                        Content="安装 WebView2"
+                        Width="120"
                         Grid.Column="2"
                         Margin="8,0,0,0"
                         Visibility="Collapsed"
                         Click="InstallWebView2_OnClick" />
-                <Button x:Name="FullscreenButton"
-                        Content="全屏地图"
-                        Width="110"
-                        Grid.Column="3"
-                        Margin="8,0,0,0"
-                        Click="ToggleFullscreen_OnClick" />
-                <StackPanel Grid.Column="4" Margin="12,0,0,0">
+                <StackPanel Grid.Column="3" Margin="12,0,0,0">
                     <TextBlock VerticalAlignment="Center" Foreground="#4A6A8A" Text="{Binding WorkbenchStatus}" />
                     <ProgressBar Height="7" Margin="0,5,0,0" Minimum="0" Maximum="100" Value="{Binding RunProgress}" />
                     <TextBlock Margin="0,4,0,0" FontSize="11" Foreground="#6D87A5" Text="{Binding RunMessage}" TextTrimming="CharacterEllipsis" />
@@ -47,12 +40,49 @@
         <Border Grid.Row="1" Margin="0,12,0,0" Background="White" BorderBrush="#D9E5F4" BorderThickness="1" CornerRadius="10">
             <Grid>
                 <wv2:WebView2 x:Name="MapWebView" />
-                <Border x:Name="BusyOverlay" Background="#AAFFFFFF" Visibility="Collapsed">
-                    <StackPanel Width="420" HorizontalAlignment="Center" VerticalAlignment="Center">
-                        <TextBlock Text="Preparing map runtime..." FontSize="18" FontWeight="Bold" Foreground="#1A4C7D" HorizontalAlignment="Center" />
-                        <ProgressBar Margin="0,10,0,0" Height="10" Minimum="0" Maximum="100" Value="{Binding RunProgress}" />
-                        <TextBlock Margin="0,8,0,0" Text="{Binding RunMessage}" Foreground="#4F6E90" TextAlignment="Center" TextWrapping="Wrap" />
-                    </StackPanel>
+
+                <StackPanel Orientation="Horizontal"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Top"
+                            Margin="0,10,10,0"
+                            Panel.ZIndex="5">
+                    <Button x:Name="RefreshMapButton"
+                            Content="刷新地图"
+                            Width="92"
+                            Height="34"
+                            Margin="0,0,8,0"
+                            Click="StartAll_OnClick" />
+                    <Button x:Name="FullscreenButton"
+                            Content="全屏地图"
+                            Width="92"
+                            Height="34"
+                            Click="ToggleFullscreen_OnClick" />
+                </StackPanel>
+
+                <Border x:Name="BusyOverlay" Background="#F2EEF3F9" Visibility="Collapsed" Panel.ZIndex="10">
+                    <Border Width="520"
+                            Padding="22"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Background="#FCFFFFFF"
+                            BorderBrush="#D9E5F4"
+                            BorderThickness="1"
+                            CornerRadius="16">
+                        <StackPanel>
+                            <TextBlock Text="地图正在准备中"
+                                       FontSize="20"
+                                       FontWeight="Bold"
+                                       Foreground="#1A4C7D"
+                                       HorizontalAlignment="Center" />
+                            <TextBlock Margin="0,8,0,0"
+                                       Text="程序计算与网页渲染统一加载，请稍候..."
+                                       Foreground="#5D7FA4"
+                                       HorizontalAlignment="Center" />
+                            <ProgressBar Margin="0,16,0,0" Height="10" Minimum="0" Maximum="100" Value="{Binding RunProgress}" />
+                            <TextBlock Margin="0,10,0,0" Text="{Binding RunMessage}" Foreground="#4F6E90" TextAlignment="Center" TextWrapping="Wrap" />
+                            <ProgressBar Margin="0,12,0,0" Height="4" IsIndeterminate="True" />
+                        </StackPanel>
+                    </Border>
                 </Border>
             </Grid>
         </Border>

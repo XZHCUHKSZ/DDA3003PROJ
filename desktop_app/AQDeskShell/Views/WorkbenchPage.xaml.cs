@@ -20,7 +20,7 @@ public partial class WorkbenchPage : Page, INotifyPropertyChanged
     private DateTime _pipelineStartUtc = DateTime.MinValue;
     private bool _isBusy;
     private int _runProgress;
-    private string _runMessage = "Ready.";
+    private string _runMessage = "就绪";
     private string _workbenchStatus = "Idle";
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -67,6 +67,8 @@ public partial class WorkbenchPage : Page, INotifyPropertyChanged
             _isBusy = value;
             OnPropertyChanged();
             BusyOverlay.Visibility = _isBusy ? Visibility.Visible : Visibility.Collapsed;
+            RefreshMapButton.IsEnabled = !_isBusy;
+            FullscreenButton.IsEnabled = !_isBusy;
         }
     }
 
@@ -125,14 +127,19 @@ public partial class WorkbenchPage : Page, INotifyPropertyChanged
         _pipelineStartUtc = DateTime.UtcNow;
         IsBusy = true;
         RunProgress = 2;
-        RunMessage = "正在准备运行环境与数据...";
+        RunMessage = "阶段 1/2：正在运行数据程序...";
         WorkbenchStatus = "Running main.py in background";
+
+        if (_webViewReady && MapWebView.CoreWebView2 != null)
+        {
+            MapWebView.CoreWebView2.NavigateToString("<html><body style='background:#eef3f9;'></body></html>");
+        }
 
         var code = await _state.Process.StartAllAsync();
         if (code == 0)
         {
-            RunProgress = 96;
-            RunMessage = "主流程完成，正在加载最新地图页面...";
+            RunProgress = 92;
+            RunMessage = "阶段 2/2：正在渲染并挂载地图页面...";
             WorkbenchStatus = "Map generated";
             var opened = TryOpenMapPage(requireFresh: true);
             if (!opened)
@@ -152,7 +159,10 @@ public partial class WorkbenchPage : Page, INotifyPropertyChanged
     {
         Dispatcher.Invoke(() =>
         {
-            if (e.Progress > 0) RunProgress = e.Progress;
+            if (e.Progress > 0)
+            {
+                RunProgress = Math.Min(88, e.Progress);
+            }
             RunMessage = e.Message;
         });
     }
@@ -164,7 +174,7 @@ public partial class WorkbenchPage : Page, INotifyPropertyChanged
             if (exitCode == 0)
             {
                 WorkbenchStatus = "Pipeline finished";
-                if (RunProgress < 96) RunProgress = 96;
+                if (RunProgress < 90) RunProgress = 90;
             }
             else if (RunProgress < 100)
             {
@@ -175,17 +185,18 @@ public partial class WorkbenchPage : Page, INotifyPropertyChanged
 
     private void MapWebView_NavigationCompleted(object? sender, CoreWebView2NavigationCompletedEventArgs e)
     {
-        IsBusy = false;
         if (e.IsSuccess)
         {
             RunProgress = 100;
-            RunMessage = "地图已加载完成。";
+            RunMessage = "加载完成，已进入交互地图。";
             WorkbenchStatus = "Map loaded in embedded WebView";
+            IsBusy = false;
             return;
         }
 
-        RunMessage = $"地图加载失败（0x{e.WebErrorStatus:X}）。";
+        RunMessage = $"地图加载失败（{e.WebErrorStatus}）。";
         WorkbenchStatus = "Map navigation failed";
+        IsBusy = false;
     }
 
     private bool TryOpenMapPage(bool requireFresh)
@@ -209,7 +220,7 @@ public partial class WorkbenchPage : Page, INotifyPropertyChanged
             var lastWrite = File.GetLastWriteTimeUtc(localMap);
             if (requireFresh && _pipelineStartUtc != DateTime.MinValue && lastWrite < _pipelineStartUtc.AddSeconds(-1))
             {
-                RunMessage = "检测到地图文件仍是旧缓存，请重试一次 Run Main。";
+                RunMessage = "检测到地图文件仍是旧缓存，请点击“刷新地图”重试。";
                 WorkbenchStatus = "Stale map detected";
                 return false;
             }
@@ -231,7 +242,7 @@ public partial class WorkbenchPage : Page, INotifyPropertyChanged
 h2{{margin:0 0 10px}} code{{background:#f3f7fc;padding:2px 6px;border-radius:6px}}</style></head>
 <body><div class='box'>
 <h2>地图尚未生成</h2>
-<p>主流程尚未成功完成，请点击上方 <b>Run Main (Hidden)</b> 重试。</p>
+<p>主流程尚未成功完成，请点击上方 <b>刷新并重建地图</b> 重试。</p>
 <p>常见原因：数据包未就位、Python 依赖未安装完成。</p>
 <p>预期地图路径：</p>
 <ul>
@@ -281,10 +292,9 @@ h2{{margin:0 0 10px}} code{{background:#f3f7fc;padding:2px 6px;border-radius:6px
             return;
         }
 
-        RunMessage = "WebView2 安装完成，正在重新加载地图区域...";
-        WorkbenchStatus = "Re-initializing WebView2";
+        RunMessage = "WebView2 安装完成。请点击“刷新地图”开始加载。";
+        WorkbenchStatus = "WebView2 ready";
         await InitializeWebViewAsync();
-        TryOpenMapPage(requireFresh: false);
     }
 
     private static bool InstallWebView2Runtime()
