@@ -70,6 +70,8 @@ public partial class WorkbenchPage : Page, INotifyPropertyChanged
             OnPropertyChanged();
             BusyOverlay.Visibility = _isBusy ? Visibility.Visible : Visibility.Collapsed;
             RefreshMapButton.IsEnabled = !_isBusy;
+            RefreshOnlyButton.IsEnabled = !_isBusy;
+            RefreshPageButton.IsEnabled = !_isBusy;
             FullscreenButton.IsEnabled = !_isBusy;
         }
     }
@@ -369,6 +371,46 @@ h2{{margin:0 0 10px}} code{{background:#f3f7fc;padding:2px 6px;border-radius:6px
     private async void StartAll_OnClick(object sender, RoutedEventArgs e)
     {
         await RunMainPipelineAsync();
+    }
+
+    private void ReloadMapOnly_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (!_webViewReady || MapWebView.CoreWebView2 == null)
+        {
+            RunMessage = "嵌入浏览器尚未就绪，请先重建地图。";
+            WorkbenchStatus = "WebView2 not ready";
+            return;
+        }
+
+        IsBusy = true;
+        RunProgress = Math.Max(RunProgress, 92);
+        RunMessage = "仅刷新网页：正在重新加载当前页面...";
+        WorkbenchStatus = "Reloading map page only";
+        _expectingMapNavigation = true;
+
+        try
+        {
+            if (MapWebView.Source is not null)
+            {
+                MapWebView.CoreWebView2.Reload();
+            }
+            else
+            {
+                var opened = TryOpenMapPage(requireFresh: false);
+                if (!opened)
+                {
+                    IsBusy = false;
+                    return;
+                }
+            }
+            _ = ForceLoadTimeoutFallbackAsync(15000);
+        }
+        catch (Exception ex)
+        {
+            RunMessage = $"网页刷新失败：{ex.Message}";
+            WorkbenchStatus = "Map page reload failed";
+            IsBusy = false;
+        }
     }
 
     private void ToggleFullscreen_OnClick(object sender, RoutedEventArgs e)
