@@ -6,6 +6,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 
@@ -187,16 +188,89 @@ public partial class WorkbenchPage : Page, INotifyPropertyChanged
     {
         if (e.IsSuccess)
         {
-            RunProgress = 100;
-            RunMessage = "加载完成，已进入交互地图。";
-            WorkbenchStatus = "Map loaded in embedded WebView";
-            IsBusy = false;
+            _ = ValidateRenderedMapAsync();
             return;
         }
 
         RunMessage = $"地图加载失败（{e.WebErrorStatus}）。";
         WorkbenchStatus = "Map navigation failed";
         IsBusy = false;
+    }
+
+    private async Task ValidateRenderedMapAsync()
+    {
+        try
+        {
+            if (!_webViewReady || MapWebView.CoreWebView2 == null)
+            {
+                IsBusy = false;
+                return;
+            }
+
+            await Task.Delay(650);
+            var raw = await MapWebView.CoreWebView2.ExecuteScriptAsync(
+                """
+                (() => {
+                  const hasEcharts = typeof window.echarts !== 'undefined';
+                  const hasChart = !!document.querySelector("div[_echarts_instance_], .chart-container, canvas");
+                  const bodyText = (document.body?.innerText || '').trim();
+                  return JSON.stringify({
+                    hasEcharts,
+                    hasChart,
+                    bodyLen: bodyText.length,
+                    title: document.title || ''
+                  });
+                })();
+                """
+            );
+            var scriptResult = JsonSerializer.Deserialize<string>(raw ?? "\"\"");
+            if (string.IsNullOrWhiteSpace(scriptResult))
+            {
+                RunProgress = 100;
+                RunMessage = "加载完成，已进入交互地图。";
+                WorkbenchStatus = "Map loaded in embedded WebView";
+                IsBusy = false;
+                return;
+            }
+
+            using var doc = JsonDocument.Parse(scriptResult);
+            var root = doc.RootElement;
+            var hasEcharts = root.TryGetProperty("hasEcharts", out var he) && he.GetBoolean();
+            var hasChart = root.TryGetProperty("hasChart", out var hc) && hc.GetBoolean();
+            var bodyLen = root.TryGetProperty("bodyLen", out var bl) ? bl.GetInt32() : 0;
+
+            if (hasEcharts && hasChart)
+            {
+                RunProgress = 100;
+                RunMessage = "加载完成，已进入交互地图。";
+                WorkbenchStatus = "Map loaded in embedded WebView";
+                IsBusy = false;
+                return;
+            }
+
+            var diagHtml = $@"
+<!doctype html><html><head><meta charset='utf-8'><title>Map Render Failed</title>
+<style>
+body{{font-family:Segoe UI,Arial,sans-serif;background:#eef3f9;color:#19406b;padding:24px}}
+.box{{max-width:840px;background:#fff;border:1px solid #d9e5f4;border-radius:12px;padding:20px}}
+h2{{margin:0 0 10px}} code{{background:#f3f7fc;padding:2px 6px;border-radius:6px}}
+</style></head><body><div class='box'>
+<h2>地图页面已打开，但渲染失败</h2>
+<p>检测结果：echarts={(hasEcharts ? "ok" : "missing")}，chart={(hasChart ? "ok" : "missing")}，bodyLen={bodyLen}</p>
+<p>请点击上方 <b>刷新并重建地图</b> 重试；若仍失败，请检查网络/脚本拦截策略或数据生成是否完整。</p>
+</div></body></html>";
+            MapWebView.CoreWebView2.NavigateToString(diagHtml);
+            RunMessage = "地图渲染失败：页面已加载但图表脚本未完成。";
+            WorkbenchStatus = "Map render health check failed";
+            IsBusy = false;
+        }
+        catch (Exception ex)
+        {
+            RunProgress = 100;
+            RunMessage = $"地图已加载，健康检查跳过：{ex.Message}";
+            WorkbenchStatus = "Map loaded (health check skipped)";
+            IsBusy = false;
+        }
     }
 
     private bool TryOpenMapPage(bool requireFresh)
@@ -212,7 +286,9 @@ public partial class WorkbenchPage : Page, INotifyPropertyChanged
         var candidates = new[]
         {
             Path.Combine(_state.ProjectRoot, "visualizations", "interactive_air_quality_map.html"),
+            Path.Combine(_state.ProjectRoot, "runtime", "visualizations", "interactive_air_quality_map.html"),
             Path.Combine(installRoot, "visualizations", "interactive_air_quality_map.html"),
+            Path.Combine(installRoot, "runtime", "visualizations", "interactive_air_quality_map.html"),
         };
         var localMap = candidates.FirstOrDefault(File.Exists);
         if (!string.IsNullOrWhiteSpace(localMap))
