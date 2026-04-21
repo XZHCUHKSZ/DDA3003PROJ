@@ -20,6 +20,7 @@ public partial class WorkbenchPage : Page, INotifyPropertyChanged
     private bool _isMapFullscreen;
     private DateTime _pipelineStartUtc = DateTime.MinValue;
     private bool _isBusy;
+    private CancellationTokenSource? _renderWatchdogCts;
     private int _runProgress;
     private string _runMessage = "就绪";
     private string _workbenchStatus = "Idle";
@@ -126,6 +127,7 @@ public partial class WorkbenchPage : Page, INotifyPropertyChanged
     private async Task RunMainPipelineAsync()
     {
         if (_state.Process.IsRunning) return;
+        _renderWatchdogCts?.Cancel();
         _pipelineStartUtc = DateTime.UtcNow;
         IsBusy = true;
         MapWebView.Visibility = Visibility.Collapsed;
@@ -143,6 +145,10 @@ public partial class WorkbenchPage : Page, INotifyPropertyChanged
             if (!opened)
             {
                 IsBusy = false;
+            }
+            else
+            {
+                StartRenderWatchdog();
             }
         }
         else
@@ -183,6 +189,7 @@ public partial class WorkbenchPage : Page, INotifyPropertyChanged
 
     private void MapWebView_NavigationCompleted(object? sender, CoreWebView2NavigationCompletedEventArgs e)
     {
+        _renderWatchdogCts?.Cancel();
         if (e.IsSuccess)
         {
             _ = ValidateRenderedMapAsync();
@@ -205,7 +212,7 @@ public partial class WorkbenchPage : Page, INotifyPropertyChanged
             }
 
             await Task.Delay(650);
-            var raw = await MapWebView.CoreWebView2.ExecuteScriptAsync(
+            var execTask = MapWebView.CoreWebView2.ExecuteScriptAsync(
                 """
                 (() => {
                   const hasEcharts = typeof window.echarts !== 'undefined';
@@ -220,6 +227,17 @@ public partial class WorkbenchPage : Page, INotifyPropertyChanged
                 })();
                 """
             );
+            var done = await Task.WhenAny(execTask, Task.Delay(5000));
+            if (done != execTask)
+            {
+                MapWebView.Visibility = Visibility.Visible;
+                RunProgress = 100;
+                RunMessage = "地图渲染检测超时，请点击“刷新并重建地图”重试。";
+                WorkbenchStatus = "Map render check timeout";
+                IsBusy = false;
+                return;
+            }
+            var raw = await execTask;
             var scriptResult = JsonSerializer.Deserialize<string>(raw ?? "\"\"");
             if (string.IsNullOrWhiteSpace(scriptResult))
             {
@@ -271,6 +289,33 @@ h2{{margin:0 0 10px}} code{{background:#f3f7fc;padding:2px 6px;border-radius:6px
             WorkbenchStatus = "Map loaded (health check skipped)";
             IsBusy = false;
         }
+    }
+
+    private void StartRenderWatchdog()
+    {
+        _renderWatchdogCts?.Cancel();
+        var cts = new CancellationTokenSource();
+        _renderWatchdogCts = cts;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(15000, cts.Token);
+            }
+            catch (TaskCanceledException)
+            {
+                return;
+            }
+            await Dispatcher.InvokeAsync(() =>
+            {
+                if (!IsBusy) return;
+                MapWebView.Visibility = Visibility.Visible;
+                RunProgress = Math.Max(RunProgress, 95);
+                RunMessage = "地图加载等待超时，可点击“刷新并重建地图”重试。";
+                WorkbenchStatus = "Map load timeout";
+                IsBusy = false;
+            });
+        });
     }
 
     private bool TryOpenMapPage(bool requireFresh)
