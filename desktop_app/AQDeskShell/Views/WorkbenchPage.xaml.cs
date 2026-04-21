@@ -93,6 +93,7 @@ public partial class WorkbenchPage : Page, INotifyPropertyChanged
 
     private async void WorkbenchPage_Loaded(object sender, RoutedEventArgs e)
     {
+        MapWebView.Visibility = Visibility.Collapsed;
         await InitializeWebViewAsync();
 
         if (!_autoStarted)
@@ -127,14 +128,10 @@ public partial class WorkbenchPage : Page, INotifyPropertyChanged
         if (_state.Process.IsRunning) return;
         _pipelineStartUtc = DateTime.UtcNow;
         IsBusy = true;
+        MapWebView.Visibility = Visibility.Collapsed;
         RunProgress = 2;
         RunMessage = "阶段 1/2：正在运行数据程序...";
         WorkbenchStatus = "Running main.py in background";
-
-        if (_webViewReady && MapWebView.CoreWebView2 != null)
-        {
-            MapWebView.CoreWebView2.NavigateToString("<html><body style='background:#eef3f9;'></body></html>");
-        }
 
         var code = await _state.Process.StartAllAsync();
         if (code == 0)
@@ -241,6 +238,7 @@ public partial class WorkbenchPage : Page, INotifyPropertyChanged
 
             if (hasEcharts && hasChart)
             {
+                MapWebView.Visibility = Visibility.Visible;
                 RunProgress = 100;
                 RunMessage = "加载完成，已进入交互地图。";
                 WorkbenchStatus = "Map loaded in embedded WebView";
@@ -260,12 +258,14 @@ h2{{margin:0 0 10px}} code{{background:#f3f7fc;padding:2px 6px;border-radius:6px
 <p>请点击上方 <b>刷新并重建地图</b> 重试；若仍失败，请检查网络/脚本拦截策略或数据生成是否完整。</p>
 </div></body></html>";
             MapWebView.CoreWebView2.NavigateToString(diagHtml);
+            MapWebView.Visibility = Visibility.Visible;
             RunMessage = "地图渲染失败：页面已加载但图表脚本未完成。";
             WorkbenchStatus = "Map render health check failed";
             IsBusy = false;
         }
         catch (Exception ex)
         {
+            MapWebView.Visibility = Visibility.Visible;
             RunProgress = 100;
             RunMessage = $"地图已加载，健康检查跳过：{ex.Message}";
             WorkbenchStatus = "Map loaded (health check skipped)";
@@ -305,6 +305,7 @@ h2{{margin:0 0 10px}} code{{background:#f3f7fc;padding:2px 6px;border-radius:6px
             {
                 Query = "v=" + lastWrite.Ticks
             }.Uri;
+            MapWebView.Visibility = Visibility.Visible;
             MapWebView.Source = uri;
             WorkbenchStatus = "Loading fresh map";
             return true;
@@ -327,6 +328,7 @@ h2{{margin:0 0 10px}} code{{background:#f3f7fc;padding:2px 6px;border-radius:6px
 </ul>
 </div></body></html>";
         MapWebView.CoreWebView2.NavigateToString(html);
+        MapWebView.Visibility = Visibility.Visible;
         WorkbenchStatus = "Map file not found yet";
         return false;
     }
