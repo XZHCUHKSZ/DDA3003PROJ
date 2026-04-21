@@ -661,7 +661,9 @@ function renderSettlementCompareInMainChart() {
         smooth: true,
         connectNulls: false,
         lineStyle: { color: entry.color, width: 2.5 },
-        symbolSize: 10,
+        symbol: 'circle',
+        itemStyle: { borderWidth: 0 },
+        symbolSize: 7,
         emphasis: { focus: 'series' },
         labelLayout: params => ({
             moveOverlap: 'shiftY',
@@ -675,9 +677,10 @@ function renderSettlementCompareInMainChart() {
         data: bandSeries.near,
         smooth: true,
         connectNulls: false,
-        symbolSize: 6,
+        symbol: 'circle',
+        symbolSize: 5,
         lineStyle: { color: '#1f2937', width: 2, type: 'dashed' },
-        itemStyle: { color: '#1f2937' },
+        itemStyle: { color: '#1f2937', borderWidth: 0 },
         label: { show: false }
     });
     series.push({
@@ -686,9 +689,10 @@ function renderSettlementCompareInMainChart() {
         data: bandSeries.outer,
         smooth: true,
         connectNulls: false,
-        symbolSize: 6,
+        symbol: 'circle',
+        symbolSize: 5,
         lineStyle: { color: '#64748b', width: 2, type: 'dashed' },
-        itemStyle: { color: '#64748b' },
+        itemStyle: { color: '#64748b', borderWidth: 0 },
         label: { show: false }
     });
 
@@ -1027,6 +1031,19 @@ async function renderSettlementMiniMap(centerCity, dateStr, rows) {
                 data: rows.map(r => ({
                     name: r.name,
                     value: [r.lng, r.lat, r.aqi],
+                    label: {
+                        show: !r.isCenter,
+                        formatter: '{b}',
+                        position: 'right',
+                        color: '#355677',
+                        fontSize: 10,
+                        fontWeight: 600,
+                        backgroundColor: 'rgba(255,255,255,0.82)',
+                        borderColor: '#dbe7f5',
+                        borderWidth: 1,
+                        borderRadius: 5,
+                        padding: [1, 4]
+                    },
                     itemStyle: {
                         color: r.isCenter ? '#0f172a' : '#0ea5e9',
                         borderColor: '#ffffff',
@@ -1034,6 +1051,10 @@ async function renderSettlementMiniMap(centerCity, dateStr, rows) {
                     },
                     symbolSize: r.isCenter ? 12 : 8
                 })),
+                labelLayout: {
+                    hideOverlap: true,
+                    moveOverlap: 'shiftY'
+                },
                 emphasis: { scale: false },
                 zlevel: 3
             },

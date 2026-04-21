@@ -1341,6 +1341,10 @@ async function renderMonthHeatmap() {
         xAxis: {
             type: 'category',
             data: hours,
+            name: '小时 (h)',
+            nameLocation: 'middle',
+            nameGap: 28,
+            nameTextStyle: { color: '#6b8cba', fontSize: 11, fontWeight: 600 },
             splitArea: { show: true },
             axisLabel: { color: '#6b8cba', fontSize: 11 },
             axisLine: { lineStyle: { color: '#dde8f5' } }
@@ -1348,6 +1352,11 @@ async function renderMonthHeatmap() {
         yAxis: {
             type: 'category',
             data: days.map(d => String(d).padStart(2, '0')),
+            name: '日期 (dd)',
+            nameLocation: 'middle',
+            nameGap: 46,
+            nameTextStyle: { color: '#6b8cba', fontSize: 11, fontWeight: 600 },
+            inverse: true,
             splitArea: { show: true },
             axisLabel: { color: '#6b8cba', fontSize: 11 },
             axisLine: { lineStyle: { color: '#dde8f5' } }
@@ -2496,8 +2505,9 @@ function renderLineChart() {
             smooth: true,
             connectNulls: false,
             lineStyle: { color: seriesColor, width: 2.5 },
-            itemStyle: { borderWidth: 2.5, borderColor: 'white' },
-            symbolSize: 11,
+            symbol: 'circle',
+            itemStyle: { borderWidth: 0 },
+            symbolSize: 7,
             label: {
                 show: true,
                 color: '#1a2a4a',
@@ -2612,6 +2622,7 @@ if (localStorage.getItem('APP_AI_NEED_SETUP') === '1') {
     setTimeout(() => openAIConfigDrawer(), 80);
 }
 """
+
 
 
 

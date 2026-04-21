@@ -239,8 +239,7 @@ function buildCompareSeriesData(entry, cityCount, layoutMap) {
             labelPriority: priority,
             itemStyle: {
                 color: entry.color,
-                borderWidth: 2.5,
-                borderColor: 'white'
+                borderWidth: 0
             },
             label: {
                 show: false,
@@ -470,7 +469,9 @@ function renderCompareChart() {
         smooth: true,
         connectNulls: false,
         lineStyle: { color: entry.color, width: 2.5 },
-        symbolSize: 10,
+        symbol: 'circle',
+        itemStyle: { borderWidth: 0 },
+        symbolSize: 7,
         emphasis: { focus: 'series' },
         labelLayout: params => ({
             moveOverlap: 'shiftY',
