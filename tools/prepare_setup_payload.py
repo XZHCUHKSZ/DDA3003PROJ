@@ -5,12 +5,12 @@ import shutil
 from pathlib import Path
 
 
-def copy_tree(src: Path, dst: Path) -> None:
+def copy_tree(src: Path, dst: Path, ignore=None) -> None:
     if not src.exists():
         return
     if dst.exists():
         shutil.rmtree(dst)
-    shutil.copytree(src, dst)
+    shutil.copytree(src, dst, ignore=ignore)
 
 
 def copy_file(src: Path, dst: Path) -> None:
@@ -24,7 +24,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Prepare setup payload folder for installer")
     parser.add_argument("--root", default=".", help="Project root")
     parser.add_argument("--out", default="dist/setup_payload", help="Output payload directory")
-    parser.add_argument("--publish-dir", default="desktop_app/publish/win-x64", help="Published desktop app directory")
+    parser.add_argument("--publish-dir", default="dist/desktop-shell", help="Published desktop app directory")
     args = parser.parse_args()
 
     root = Path(args.root).resolve()
@@ -40,8 +40,20 @@ def main() -> None:
 
     if not publish_dir.exists():
         raise FileNotFoundError(f"publish dir not found: {publish_dir}")
+    if not (publish_dir / "AQDeskShell.exe").exists():
+        raise FileNotFoundError(f"AQDeskShell.exe not found in publish dir: {publish_dir}")
 
-    copy_tree(publish_dir, app_dir)
+    # Never package local WebView runtime profile/cache folders.
+    copy_tree(
+        publish_dir,
+        app_dir,
+        ignore=shutil.ignore_patterns(
+            "AQDeskShell.exe.WebView2",
+            "*.WebView2",
+            "__pycache__",
+            "*.pyc",
+        ),
+    )
 
     runtime_files = [
         "main.py",
@@ -97,4 +109,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
