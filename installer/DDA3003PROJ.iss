@@ -14,7 +14,7 @@ AppId={{5C9810D2-90DD-4B17-AF80-3EB20690BF6D}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
-DefaultDirName={autopf}\DDA3003PROJ
+DefaultDirName={localappdata}\DDA3003PROJ
 DefaultGroupName=DDA3003PROJ
 DisableProgramGroupPage=yes
 OutputDir=..\dist\installer
@@ -24,6 +24,7 @@ SolidCompression=yes
 WizardStyle=modern
 ArchitecturesAllowed=x64
 ArchitecturesInstallIn64BitMode=x64
+PrivilegesRequired=lowest
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

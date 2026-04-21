@@ -56,7 +56,7 @@ function Install-Python311 {
     $wg = Get-Command winget -ErrorAction SilentlyContinue
     if ($wg) {
         try {
-            winget install --id Python.Python.3.11 -e --silent --accept-package-agreements --accept-source-agreements
+            winget install --id Python.Python.3.11 -e --scope user --silent --accept-package-agreements --accept-source-agreements
         } catch {
             Write-Warn "winget install failed: $($_.Exception.Message)"
         }

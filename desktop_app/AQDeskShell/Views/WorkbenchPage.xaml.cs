@@ -1,4 +1,4 @@
-using AQDeskShell.Services;
+﻿using AQDeskShell.Services;
 using AQDeskShell.ViewModels;
 using System.ComponentModel;
 using System.IO;
@@ -13,6 +13,7 @@ public partial class WorkbenchPage : Page, INotifyPropertyChanged
 {
     private readonly ShellState _state;
     private bool _autoStarted;
+    private bool _webViewReady;
     private bool _isBusy;
     private int _runProgress;
     private string _runMessage = "Ready.";
@@ -84,8 +85,20 @@ public partial class WorkbenchPage : Page, INotifyPropertyChanged
 
     private async void WorkbenchPage_Loaded(object sender, RoutedEventArgs e)
     {
-        await MapWebView.EnsureCoreWebView2Async();
+        try
+        {
+            await MapWebView.EnsureCoreWebView2Async();
+            _webViewReady = true;
+        }
+        catch (Exception ex)
+        {
+            _webViewReady = false;
+            RunMessage = $"嵌入浏览器初始化失败：{ex.Message}";
+            WorkbenchStatus = "WebView2 unavailable";
+        }
+
         TryOpenMapPage();
+
         if (!_autoStarted)
         {
             _autoStarted = true;
@@ -143,6 +156,12 @@ public partial class WorkbenchPage : Page, INotifyPropertyChanged
 
     private void TryOpenMapPage()
     {
+        if (!_webViewReady)
+        {
+            WorkbenchStatus = "WebView2 不可用（地图生成后可改用外部浏览器打开）";
+            return;
+        }
+
         var runtimeDir = new DirectoryInfo(_state.ProjectRoot);
         var installRoot = runtimeDir.Parent?.FullName ?? _state.ProjectRoot;
         var candidates = new[]
@@ -157,6 +176,7 @@ public partial class WorkbenchPage : Page, INotifyPropertyChanged
             WorkbenchStatus = "Map loaded in embedded WebView";
             return;
         }
+
         var html = $@"
 <!doctype html>
 <html><head><meta charset='utf-8'><title>Map Not Ready</title>

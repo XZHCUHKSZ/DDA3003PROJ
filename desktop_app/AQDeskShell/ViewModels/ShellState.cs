@@ -1,4 +1,4 @@
-using AQDeskShell.Services;
+﻿using AQDeskShell.Services;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
