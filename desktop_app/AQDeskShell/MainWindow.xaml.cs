@@ -9,6 +9,11 @@ namespace AQDeskShell;
 public partial class MainWindow : Window
 {
     private readonly ShellState _state;
+    private bool _immersiveMapMode;
+    private WindowStyle _prevWindowStyle;
+    private ResizeMode _prevResizeMode;
+    private WindowState _prevWindowState;
+    private bool _prevTopmost;
 
     public MainWindow()
     {
@@ -26,6 +31,36 @@ public partial class MainWindow : Window
             Owner = this
         };
         dialog.ShowDialog();
+    }
+
+    public void SetMapImmersiveMode(bool enabled)
+    {
+        if (enabled == _immersiveMapMode) return;
+
+        if (enabled)
+        {
+            _prevWindowStyle = WindowStyle;
+            _prevResizeMode = ResizeMode;
+            _prevWindowState = WindowState;
+            _prevTopmost = Topmost;
+
+            HeaderBar.Visibility = Visibility.Collapsed;
+            HeaderRow.Height = new GridLength(0);
+            WindowStyle = WindowStyle.None;
+            ResizeMode = ResizeMode.NoResize;
+            WindowState = WindowState.Maximized;
+            Topmost = false;
+            _immersiveMapMode = true;
+            return;
+        }
+
+        HeaderBar.Visibility = Visibility.Visible;
+        HeaderRow.Height = new GridLength(58);
+        WindowStyle = _prevWindowStyle;
+        ResizeMode = _prevResizeMode;
+        WindowState = _prevWindowState;
+        Topmost = _prevTopmost;
+        _immersiveMapMode = false;
     }
 
     private static string ResolveProjectRoot()

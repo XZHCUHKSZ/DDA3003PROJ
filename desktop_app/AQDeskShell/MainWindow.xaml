@@ -11,13 +11,14 @@
         MinWidth="1200"
         WindowStartupLocation="CenterScreen"
         Background="#EEF3F9">
-    <Grid>
+    <Grid x:Name="RootGrid">
         <Grid.RowDefinitions>
-            <RowDefinition Height="58" />
+            <RowDefinition x:Name="HeaderRow" Height="58" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <Border Grid.Row="0"
+        <Border x:Name="HeaderBar"
+                Grid.Row="0"
                 Background="#FFFFFF"
                 BorderBrush="#D5E2F1"
                 BorderThickness="0,0,0,1">

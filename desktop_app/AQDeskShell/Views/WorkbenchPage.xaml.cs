@@ -1,5 +1,6 @@
 ﻿using AQDeskShell.Services;
 using AQDeskShell.ViewModels;
+using Microsoft.Web.WebView2.Core;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
@@ -15,6 +16,8 @@ public partial class WorkbenchPage : Page, INotifyPropertyChanged
     private readonly ShellState _state;
     private bool _autoStarted;
     private bool _webViewReady;
+    private bool _isMapFullscreen;
+    private DateTime _pipelineStartUtc = DateTime.MinValue;
     private bool _isBusy;
     private int _runProgress;
     private string _runMessage = "Ready.";
@@ -82,12 +85,12 @@ public partial class WorkbenchPage : Page, INotifyPropertyChanged
     {
         _state.Process.ProgressChanged -= Process_ProgressChanged;
         _state.Process.ProcessCompleted -= Process_ProcessCompleted;
+        SetMapFullscreen(false);
     }
 
     private async void WorkbenchPage_Loaded(object sender, RoutedEventArgs e)
     {
         await InitializeWebViewAsync();
-        TryOpenMapPage();
 
         if (!_autoStarted)
         {
@@ -103,6 +106,8 @@ public partial class WorkbenchPage : Page, INotifyPropertyChanged
             await MapWebView.EnsureCoreWebView2Async();
             _webViewReady = true;
             InstallWebViewButton.Visibility = Visibility.Collapsed;
+            MapWebView.NavigationCompleted -= MapWebView_NavigationCompleted;
+            MapWebView.NavigationCompleted += MapWebView_NavigationCompleted;
         }
         catch (Exception ex)
         {
@@ -110,30 +115,37 @@ public partial class WorkbenchPage : Page, INotifyPropertyChanged
             InstallWebViewButton.Visibility = Visibility.Visible;
             RunMessage = $"嵌入浏览器初始化失败：{ex.Message}";
             WorkbenchStatus = "WebView2 unavailable";
+            IsBusy = false;
         }
     }
 
     private async Task RunMainPipelineAsync()
     {
         if (_state.Process.IsRunning) return;
+        _pipelineStartUtc = DateTime.UtcNow;
         IsBusy = true;
         RunProgress = 2;
-        RunMessage = "Starting hidden bootstrap pipeline...";
+        RunMessage = "正在准备运行环境与数据...";
         WorkbenchStatus = "Running main.py in background";
+
         var code = await _state.Process.StartAllAsync();
         if (code == 0)
         {
-            RunProgress = 100;
-            RunMessage = "Completed.";
+            RunProgress = 96;
+            RunMessage = "主流程完成，正在加载最新地图页面...";
             WorkbenchStatus = "Map generated";
-            TryOpenMapPage();
+            var opened = TryOpenMapPage(requireFresh: true);
+            if (!opened)
+            {
+                IsBusy = false;
+            }
         }
         else
         {
-            RunMessage = $"Failed with exit code {code}";
+            RunMessage = $"主流程失败，退出码 {code}";
             WorkbenchStatus = "Run failed";
+            IsBusy = false;
         }
-        IsBusy = false;
     }
 
     private void Process_ProgressChanged(object? sender, ProcessProgressEvent e)
@@ -151,8 +163,8 @@ public partial class WorkbenchPage : Page, INotifyPropertyChanged
         {
             if (exitCode == 0)
             {
-                RunProgress = 100;
                 WorkbenchStatus = "Pipeline finished";
+                if (RunProgress < 96) RunProgress = 96;
             }
             else if (RunProgress < 100)
             {
@@ -161,12 +173,27 @@ public partial class WorkbenchPage : Page, INotifyPropertyChanged
         });
     }
 
-    private void TryOpenMapPage()
+    private void MapWebView_NavigationCompleted(object? sender, CoreWebView2NavigationCompletedEventArgs e)
+    {
+        IsBusy = false;
+        if (e.IsSuccess)
+        {
+            RunProgress = 100;
+            RunMessage = "地图已加载完成。";
+            WorkbenchStatus = "Map loaded in embedded WebView";
+            return;
+        }
+
+        RunMessage = $"地图加载失败（0x{e.WebErrorStatus:X}）。";
+        WorkbenchStatus = "Map navigation failed";
+    }
+
+    private bool TryOpenMapPage(bool requireFresh)
     {
         if (!_webViewReady)
         {
             WorkbenchStatus = "WebView2 不可用（地图生成后可改用外部浏览器打开）";
-            return;
+            return false;
         }
 
         var runtimeDir = new DirectoryInfo(_state.ProjectRoot);
@@ -179,9 +206,21 @@ public partial class WorkbenchPage : Page, INotifyPropertyChanged
         var localMap = candidates.FirstOrDefault(File.Exists);
         if (!string.IsNullOrWhiteSpace(localMap))
         {
-            MapWebView.Source = new Uri(localMap);
-            WorkbenchStatus = "Map loaded in embedded WebView";
-            return;
+            var lastWrite = File.GetLastWriteTimeUtc(localMap);
+            if (requireFresh && _pipelineStartUtc != DateTime.MinValue && lastWrite < _pipelineStartUtc.AddSeconds(-1))
+            {
+                RunMessage = "检测到地图文件仍是旧缓存，请重试一次 Run Main。";
+                WorkbenchStatus = "Stale map detected";
+                return false;
+            }
+
+            var uri = new UriBuilder(new Uri(localMap))
+            {
+                Query = "v=" + lastWrite.Ticks
+            }.Uri;
+            MapWebView.Source = uri;
+            WorkbenchStatus = "Loading fresh map";
+            return true;
         }
 
         var html = $@"
@@ -202,11 +241,25 @@ h2{{margin:0 0 10px}} code{{background:#f3f7fc;padding:2px 6px;border-radius:6px
 </div></body></html>";
         MapWebView.CoreWebView2.NavigateToString(html);
         WorkbenchStatus = "Map file not found yet";
+        return false;
     }
 
     private async void StartAll_OnClick(object sender, RoutedEventArgs e)
     {
         await RunMainPipelineAsync();
+    }
+
+    private void ToggleFullscreen_OnClick(object sender, RoutedEventArgs e)
+    {
+        SetMapFullscreen(!_isMapFullscreen);
+    }
+
+    private void SetMapFullscreen(bool enabled)
+    {
+        var wnd = Window.GetWindow(this) as MainWindow;
+        wnd?.SetMapImmersiveMode(enabled);
+        _isMapFullscreen = enabled;
+        FullscreenButton.Content = enabled ? "退出全屏" : "全屏地图";
     }
 
     private async void InstallWebView2_OnClick(object sender, RoutedEventArgs e)
@@ -231,7 +284,7 @@ h2{{margin:0 0 10px}} code{{background:#f3f7fc;padding:2px 6px;border-radius:6px
         RunMessage = "WebView2 安装完成，正在重新加载地图区域...";
         WorkbenchStatus = "Re-initializing WebView2";
         await InitializeWebViewAsync();
-        TryOpenMapPage();
+        TryOpenMapPage(requireFresh: false);
     }
 
     private static bool InstallWebView2Runtime()
@@ -290,6 +343,7 @@ h2{{margin:0 0 10px}} code{{background:#f3f7fc;padding:2px 6px;border-radius:6px
 
     private void BackHome_OnClick(object sender, RoutedEventArgs e)
     {
+        SetMapFullscreen(false);
         NavigationService?.Navigate(new HomePage(_state));
     }
 
