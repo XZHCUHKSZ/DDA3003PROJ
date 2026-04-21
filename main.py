@@ -107,7 +107,8 @@ def main() -> None:
 if __name__ == "__main__":
     main()
     try:
-        if sys.stdin and sys.stdin.isatty():
+        non_interactive = os.environ.get("AQ_NONINTERACTIVE", "").strip().lower() in {"1", "true", "yes", "on"}
+        if (not non_interactive) and sys.stdin and sys.stdin.isatty():
             input("\nPress Enter to exit...")
     except Exception:
         pass

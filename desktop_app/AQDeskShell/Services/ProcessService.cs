@@ -49,6 +49,7 @@ public class ProcessService
             RedirectStandardError = true,
             CreateNoWindow = true,
         };
+        psi.Environment["AQ_NONINTERACTIVE"] = "1";
 
         _activeProc = Process.Start(psi) ?? throw new InvalidOperationException("Failed to start process.");
         _activeProc.OutputDataReceived += (_, e) => ParseLine(e.Data);
