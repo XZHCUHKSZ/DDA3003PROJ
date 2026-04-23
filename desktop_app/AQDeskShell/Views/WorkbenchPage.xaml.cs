@@ -19,6 +19,7 @@ public partial class WorkbenchPage : Page, INotifyPropertyChanged
     private bool _webViewReady;
     private bool _isMapFullscreen;
     private bool _expectingMapNavigation;
+    private bool _echartsRecoveryAttempted;
     private DateTime _pipelineStartUtc = DateTime.MinValue;
     private bool _isBusy;
     private int _runProgress;
@@ -132,6 +133,7 @@ public partial class WorkbenchPage : Page, INotifyPropertyChanged
         _pipelineStartUtc = DateTime.UtcNow;
         IsBusy = true;
         _expectingMapNavigation = false;
+        _echartsRecoveryAttempted = false;
         RunProgress = 2;
         RunMessage = "阶段 1/2：正在运行数据程序...";
         WorkbenchStatus = "Running main.py in background";
@@ -255,6 +257,21 @@ public partial class WorkbenchPage : Page, INotifyPropertyChanged
             var hasChart = root.TryGetProperty("hasChart", out var hc) && hc.GetBoolean();
             var bodyLen = root.TryGetProperty("bodyLen", out var bl) ? bl.GetInt32() : 0;
 
+            if (!hasEcharts && hasChart && !_echartsRecoveryAttempted)
+            {
+                _echartsRecoveryAttempted = true;
+                var recovered = await TryRecoverEchartsAsync();
+                if (recovered)
+                {
+                    RunMessage = "检测到图表脚本缺失，已自动修复并重载页面...";
+                    WorkbenchStatus = "Recovering echarts script";
+                    _expectingMapNavigation = true;
+                    MapWebView.CoreWebView2.Reload();
+                    _ = ForceLoadTimeoutFallbackAsync(15000);
+                    return;
+                }
+            }
+
             if (hasEcharts && hasChart)
             {
                 MapWebView.Visibility = Visibility.Visible;
@@ -290,6 +307,50 @@ h2{{margin:0 0 10px}} code{{background:#f3f7fc;padding:2px 6px;border-radius:6px
             WorkbenchStatus = "Map loaded (health check skipped)";
             IsBusy = false;
         }
+    }
+
+    private async Task<bool> TryRecoverEchartsAsync()
+    {
+        if (!_webViewReady || MapWebView.CoreWebView2 == null)
+        {
+            return false;
+        }
+
+        var execTask = MapWebView.CoreWebView2.ExecuteScriptAsync(
+            """
+            (async () => {
+              if (typeof window.echarts !== 'undefined') return true;
+              const urls = [
+                'https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js',
+                'https://fastly.jsdelivr.net/npm/echarts@5/dist/echarts.min.js',
+                'https://unpkg.com/echarts@5/dist/echarts.min.js'
+              ];
+              const load = (url) => new Promise((resolve) => {
+                const s = document.createElement('script');
+                s.src = url;
+                s.async = true;
+                s.onload = () => resolve(typeof window.echarts !== 'undefined');
+                s.onerror = () => resolve(false);
+                document.head.appendChild(s);
+              });
+              for (const u of urls) {
+                try {
+                  const ok = await load(u);
+                  if (ok) return true;
+                } catch (_) {}
+              }
+              return typeof window.echarts !== 'undefined';
+            })();
+            """
+        );
+        var done = await Task.WhenAny(execTask, Task.Delay(8000));
+        if (done != execTask)
+        {
+            return false;
+        }
+        var raw = await execTask;
+        var scriptResult = JsonSerializer.Deserialize<string>(raw ?? "false");
+        return string.Equals(scriptResult, "true", StringComparison.OrdinalIgnoreCase);
     }
 
     private bool TryOpenMapPage(bool requireFresh)
