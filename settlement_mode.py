@@ -621,7 +621,11 @@ function renderSettlementCompareInMainChart() {
         return;
     }
 
-    const selectedRows = rows;
+    const selectedRows = rows.slice().sort((a, b) => {
+        if (a.isCenter && !b.isCenter) return -1;
+        if (!a.isCenter && b.isCenter) return 1;
+        return a.distanceKm - b.distanceKm;
+    });
 
     const endIdx = currentDateIndex;
     const startIdx = Math.max(0, endIdx - 6);
@@ -637,11 +641,14 @@ function renderSettlementCompareInMainChart() {
     const labelFontSize = typeof getCompareLabelFontSize === 'function'
         ? getCompareLabelFontSize(cityCount)
         : 10;
+    const centerSeriesColor = '#1565c0';
+    const companionPalette = ['#89aee5', '#9ab8e8', '#7fb4d6', '#b2a7e8', '#83c1b8', '#c0b3ea', '#7fa6c9', '#9fc9a8'];
     const seriesEntries = selectedRows.map((row, idx) => {
-        const color = row.isCenter ? '#111827' : COMPARE_PALETTE[idx % COMPARE_PALETTE.length];
+        const color = row.isCenter ? centerSeriesColor : companionPalette[idx % companionPalette.length];
         const values = getSettlementTrendValues(row.name, selectedMetric, startIdx, endIdx);
         return {
             name: row.name,
+            isCenter: !!row.isCenter,
             color: color,
             values: values,
             meta: typeof getCompareLabelMeta === 'function'
@@ -655,16 +662,36 @@ function renderSettlementCompareInMainChart() {
     const series = seriesEntries.map(entry => ({
         name: entry.name,
         type: 'line',
+        z: entry.isCenter ? 10 : 3,
+        zlevel: entry.isCenter ? 1 : 0,
         data: typeof buildCompareSeriesData === 'function'
             ? buildCompareSeriesData(entry, cityCount, layoutMap)
             : entry.values,
         smooth: true,
         connectNulls: false,
-        lineStyle: { color: entry.color, width: 2.5 },
+        lineStyle: {
+            color: entry.color,
+            width: entry.isCenter ? 4 : 1.9,
+            type: entry.isCenter ? 'solid' : 'dashed',
+            opacity: entry.isCenter ? 1 : 0.82
+        },
         symbol: 'circle',
-        itemStyle: { borderWidth: 0 },
-        symbolSize: 7,
-        emphasis: { focus: 'series' },
+        itemStyle: {
+            color: entry.color,
+            borderWidth: 0,
+            opacity: entry.isCenter ? 1 : 0.96
+        },
+        symbolSize: entry.isCenter ? 8 : 5,
+        emphasis: {
+            focus: 'series',
+            lineStyle: {
+                width: entry.isCenter ? 4.5 : 2.6,
+                opacity: 1
+            },
+            itemStyle: {
+                opacity: 1
+            }
+        },
         labelLayout: params => ({
             moveOverlap: 'shiftY',
             hideOverlap: cityCount > 7 && params.data && params.data.labelPriority < 3
@@ -704,7 +731,8 @@ function renderSettlementCompareInMainChart() {
             bottom: 0,
             textStyle: { color: '#6b8cba', fontSize: Math.max(10, labelFontSize + 1) },
             itemWidth: 14,
-            itemHeight: 8
+            itemHeight: 8,
+            selectedMode: true
         },
         tooltip: {
             trigger: 'axis',

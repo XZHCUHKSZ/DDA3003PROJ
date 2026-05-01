@@ -252,6 +252,43 @@ body {
     background: #dde8f5;
     margin: 2px 4px;
 }
+body.presentation-fullscreen {
+    background: #eef4fb !important;
+}
+body.presentation-fullscreen #mapControls {
+    top: 18px;
+}
+body.presentation-fullscreen #topTimelineBar,
+body.presentation-fullscreen #topMonthBar {
+    top: 18px;
+    box-shadow: 0 12px 32px rgba(21,101,192,0.16);
+}
+body.presentation-fullscreen #compareBtn {
+    top: 18px;
+    right: 18px;
+}
+body.presentation-fullscreen #scrollHint {
+    opacity: 0;
+    pointer-events: none;
+}
+body.presentation-fullscreen #mapWrapper > .chart-container,
+body.presentation-fullscreen #mapWrapper > div[_echarts_instance_] {
+    height: 100vh !important;
+}
+body.presentation-fullscreen #infoSection {
+    padding-top: 10px;
+}
+body.presentation-fullscreen #chartPanel,
+body.presentation-fullscreen #settlementPanel,
+body.presentation-fullscreen #monthHeatmapSection,
+body.presentation-fullscreen #aiInsightSection {
+    box-shadow: 0 10px 32px rgba(21,101,192,0.10);
+}
+body.presentation-fullscreen .map-ctrl-btn.active {
+    background: #1565c0;
+    color: #fff;
+    border-color: #1565c0;
+}
 
 #topTimelineBar {
     position: absolute;
@@ -497,6 +534,7 @@ def build_dom(all_dates: list[str], current_index: int) -> str:
         <button class="map-ctrl-btn" id="ctrlZoomIn" title="{zoom_in}">+</button>
         <button class="map-ctrl-btn" id="ctrlZoomOut" title="{zoom_out}">-</button>
         <button class="map-ctrl-btn" id="ctrlReset" title="{reset_view}" style="font-size:14px;">R</button>
+        <button class="map-ctrl-btn" id="ctrlPresent" title="展示全屏" style="font-size:15px;">⛶</button>
         <button class="map-ctrl-btn" id="ctrlAISetup" title="AI服务设置" style="font-size:12px;">AI</button>
         <div class="map-ctrl-sep"></div>
         <button class="map-ctrl-btn" id="ctrlGoDetail" title="{goto_detail}" style="font-size:13px;">
@@ -892,6 +930,48 @@ function waitForMainMapChart(attempt, onDone) {
     setTimeout(() => waitForMainMapChart(attempt + 1, onDone), 100);
 }
 
+let pagePresentationMode = false;
+
+function syncPresentationButton() {
+    const btn = byId('ctrlPresent');
+    if (!btn) return;
+    btn.classList.toggle('active', pagePresentationMode);
+    btn.textContent = pagePresentationMode ? '×' : '⛶';
+    btn.title = pagePresentationMode ? '退出展示全屏' : '展示全屏';
+}
+
+function setPresentationMode(enabled) {
+    pagePresentationMode = !!enabled;
+    document.body.classList.toggle('presentation-fullscreen', pagePresentationMode);
+    syncPresentationButton();
+    setTimeout(() => {
+        if (mapChartInstance) mapChartInstance.resize();
+        if (metricsChart) metricsChart.resize();
+        if (settlementMapChart) settlementMapChart.resize();
+        if (typeof monthHeatmapChart !== 'undefined' && monthHeatmapChart) monthHeatmapChart.resize();
+    }, 60);
+}
+
+async function togglePresentationMode() {
+    const target = document.documentElement;
+    const isFull = !!document.fullscreenElement;
+    try {
+        if (!isFull) {
+            if (target.requestFullscreen) {
+                await target.requestFullscreen();
+            }
+            setPresentationMode(true);
+        } else {
+            if (document.exitFullscreen) {
+                await document.exitFullscreen();
+            }
+            setPresentationMode(false);
+        }
+    } catch (err) {
+        setPresentationMode(!pagePresentationMode);
+    }
+}
+
 setTimeout(function bootAttachMap() {
     setBootStatus(t('loader.status.connect_map'), t('loader.sub.connect_map'));
     waitForMainMapChart(0, function(attached) {
@@ -952,6 +1032,9 @@ setTimeout(function bootAttachMap() {
     byId('ctrlZoomIn')?.addEventListener('click', () => applyGeoView(currentZoom * ZOOM_STEP));
     byId('ctrlZoomOut')?.addEventListener('click', () => applyGeoView(currentZoom / ZOOM_STEP));
     byId('ctrlReset')?.addEventListener('click', () => applyGeoView(1.2, [105, 36]));
+    byId('ctrlPresent')?.addEventListener('click', () => {
+        togglePresentationMode();
+    });
     byId('ctrlAISetup')?.addEventListener('click', () => {
         if (typeof window.openAIConfigFromBoot === 'function') {
             window.openAIConfigFromBoot();
@@ -973,6 +1056,10 @@ setTimeout(function bootAttachMap() {
             aqi = params.value;
         }
         showCityInfo(params.name, aqi);
+    });
+
+    document.addEventListener('fullscreenchange', () => {
+        setPresentationMode(!!document.fullscreenElement);
     });
 
     let finishHooked = false;
