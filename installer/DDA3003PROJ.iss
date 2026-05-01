@@ -4,7 +4,7 @@
 ;   python .\tools\prepare_setup_payload.py --root . --out .\dist\setup_payload --publish-dir desktop_app/publish/win-x64
 
 #define MyAppName "DDA3003PROJ Air Quality Platform"
-#define MyAppVersion "0.1.5"
+#define MyAppVersion "0.1.6"
 #define MyAppPublisher "DDA3003PROJ Team"
 #define MyAppExeName "AQDeskShell.exe"
 #define PayloadRoot "..\dist\setup_payload"
