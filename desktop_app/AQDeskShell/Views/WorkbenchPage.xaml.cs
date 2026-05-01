@@ -278,6 +278,10 @@ public partial class WorkbenchPage : Page, INotifyPropertyChanged
                 RunProgress = 100;
                 RunMessage = "加载完成，已进入交互地图。";
                 WorkbenchStatus = "Map loaded in embedded WebView";
+                if (_isMapFullscreen)
+                {
+                    await SyncEmbeddedPresentationModeAsync(true);
+                }
                 IsBusy = false;
                 return;
             }
@@ -484,7 +488,44 @@ h2{{margin:0 0 10px}} code{{background:#f3f7fc;padding:2px 6px;border-radius:6px
         var wnd = Window.GetWindow(this) as MainWindow;
         wnd?.SetMapImmersiveMode(enabled);
         _isMapFullscreen = enabled;
-        FullscreenButton.Content = enabled ? "退出全屏" : "全屏地图";
+        ToolbarPanel.Visibility = enabled ? Visibility.Collapsed : Visibility.Visible;
+        RootGrid.Margin = enabled ? new Thickness(0) : new Thickness(16);
+        WebHostBorder.Margin = enabled ? new Thickness(0) : new Thickness(0, 12, 0, 0);
+        WebHostBorder.CornerRadius = enabled ? new CornerRadius(0) : new CornerRadius(10);
+        WebHostBorder.BorderThickness = enabled ? new Thickness(0) : new Thickness(1);
+        RefreshMapButton.Visibility = enabled ? Visibility.Collapsed : Visibility.Visible;
+        RefreshOnlyButton.Visibility = enabled ? Visibility.Collapsed : Visibility.Visible;
+        OverlayControls.Margin = enabled ? new Thickness(0, 12, 12, 0) : new Thickness(0, 10, 10, 0);
+        FullscreenButton.Content = enabled ? "退出网页全屏" : "网页全屏";
+        FullscreenButton.Width = enabled ? 128 : 108;
+        _ = SyncEmbeddedPresentationModeAsync(enabled);
+    }
+
+    private async Task SyncEmbeddedPresentationModeAsync(bool enabled)
+    {
+        if (!_webViewReady || MapWebView.CoreWebView2 == null)
+        {
+            return;
+        }
+
+        try
+        {
+            await MapWebView.CoreWebView2.ExecuteScriptAsync(
+                $$"""
+                (() => {
+                  if (typeof window.setPresentationMode === 'function') {
+                    window.setPresentationMode({{enabled.ToString().ToLowerInvariant()}});
+                    return true;
+                  }
+                  return false;
+                })();
+                """
+            );
+        }
+        catch
+        {
+            // The page may still be loading; best-effort sync is enough.
+        }
     }
 
     private async void InstallWebView2_OnClick(object sender, RoutedEventArgs e)
