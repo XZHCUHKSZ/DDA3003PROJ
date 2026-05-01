@@ -9,6 +9,7 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 
 namespace AQDeskShell.Views;
 
@@ -92,11 +93,20 @@ public partial class WorkbenchPage : Page, INotifyPropertyChanged
     {
         _state.Process.ProgressChanged -= Process_ProgressChanged;
         _state.Process.ProcessCompleted -= Process_ProcessCompleted;
+        if (Window.GetWindow(this) is Window wnd)
+        {
+            wnd.PreviewKeyDown -= HostWindow_PreviewKeyDown;
+        }
         SetMapFullscreen(false);
     }
 
     private async void WorkbenchPage_Loaded(object sender, RoutedEventArgs e)
     {
+        if (Window.GetWindow(this) is Window wnd)
+        {
+            wnd.PreviewKeyDown -= HostWindow_PreviewKeyDown;
+            wnd.PreviewKeyDown += HostWindow_PreviewKeyDown;
+        }
         MapWebView.Visibility = Visibility.Visible;
         await InitializeWebViewAsync();
 
@@ -495,11 +505,26 @@ h2{{margin:0 0 10px}} code{{background:#f3f7fc;padding:2px 6px;border-radius:6px
         WebHostBorder.BorderThickness = enabled ? new Thickness(0) : new Thickness(1);
         RefreshMapButton.Visibility = enabled ? Visibility.Collapsed : Visibility.Visible;
         RefreshOnlyButton.Visibility = enabled ? Visibility.Collapsed : Visibility.Visible;
+        FloatingExitFullscreenButton.Visibility = enabled ? Visibility.Visible : Visibility.Collapsed;
         OverlayControls.Margin = enabled ? new Thickness(0, 12, 12, 0) : new Thickness(0, 10, 10, 0);
         FullscreenButton.Content = enabled ? "退出网页全屏" : "网页全屏";
         FullscreenButton.Width = enabled ? 128 : 108;
         ToolbarFullscreenButton.Content = enabled ? "退出网页全屏" : "网页全屏";
         _ = SyncEmbeddedPresentationModeAsync(enabled);
+    }
+
+    private void HostWindow_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (!_isMapFullscreen)
+        {
+            return;
+        }
+
+        if (e.Key == Key.Escape)
+        {
+            e.Handled = true;
+            SetMapFullscreen(false);
+        }
     }
 
     private async Task SyncEmbeddedPresentationModeAsync(bool enabled)
