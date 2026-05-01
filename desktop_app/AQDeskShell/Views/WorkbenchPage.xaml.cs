@@ -498,6 +498,7 @@ h2{{margin:0 0 10px}} code{{background:#f3f7fc;padding:2px 6px;border-radius:6px
         OverlayControls.Margin = enabled ? new Thickness(0, 12, 12, 0) : new Thickness(0, 10, 10, 0);
         FullscreenButton.Content = enabled ? "退出网页全屏" : "网页全屏";
         FullscreenButton.Width = enabled ? 128 : 108;
+        ToolbarFullscreenButton.Content = enabled ? "退出网页全屏" : "网页全屏";
         _ = SyncEmbeddedPresentationModeAsync(enabled);
     }
 
